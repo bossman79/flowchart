@@ -17,9 +17,11 @@
       <header class="topbar">
         <div>
           <h1>Hierarchy Tree Builder</h1>
-          <p>Drag nodes from the bank to build and reorganize your tree.</p>
+          <p>Drag nodes from the bank to build your tree. Indent to create children.</p>
         </div>
         <div class="topbar-actions">
+          <button id="expandAll" class="ghost" type="button">Expand All</button>
+          <button id="collapseAll" class="ghost" type="button">Collapse All</button>
           <button id="clearCanvas" class="ghost" type="button">Clear canvas</button>
         </div>
       </header>
@@ -29,9 +31,9 @@
           <div class="panel-header">
             <div>
               <h2>Tree Canvas</h2>
-              <span class="panel-subtitle"
-                >Arrange nodes in any order and drag to reposition.</span
-              >
+              <span class="panel-subtitle">
+                Drag to the left edge for siblings, indent to create children. Click arrows to collapse/expand.
+              </span>
             </div>
           </div>
           <div
@@ -39,14 +41,15 @@
             class="canvas"
             tabindex="0"
             aria-label="Tree canvas drop zone"
+            role="tree"
           >
             <div class="canvas-placeholder">
               <strong>Drop nodes here</strong>
-              <span>Create a hierarchy by arranging nodes on the canvas.</span>
+              <span>Create a hierarchy by dragging nodes from the bank.</span>
             </div>
           </div>
           <div class="canvas-footer">
-            <span class="hint">Tip: Select a node and press Delete.</span>
+            <span class="hint">Tip: Select a node and press Delete to remove it. Drag right to make a child, left to make a sibling.</span>
           </div>
         </section>
 
