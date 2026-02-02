@@ -31,12 +31,13 @@
 
         <div class="sidebar-section import-section">
           <div class="section-header">
-            <h2>Import</h2>
+            <h2>Import / Export</h2>
           </div>
           <div class="import-controls">
             <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
             <button id="importBtn" type="button" class="btn btn-sm">Import CSV/XLSX</button>
-            <p class="import-hint">Uses Level 0-3 columns from the first sheet.</p>
+            <button id="exportBtn" type="button" class="btn btn-sm">Export CSV</button>
+            <p class="import-hint">Uses Level columns from the first sheet.</p>
             <p class="import-status" id="importStatus" aria-live="polite"></p>
           </div>
         </div>
@@ -81,6 +82,13 @@
           <button id="zoomReset" class="btn btn-sm" title="Reset Zoom">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
           </button>
+          <div class="level-toggle" title="Toggle level tinting">
+            <span>Level color</span>
+            <label class="toggle-switch">
+              <input id="levelTintToggle" type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
         </div>
       </div>
       

@@ -32,8 +32,19 @@ const zoomLevel = document.getElementById('zoomLevel');
 const importBtn = document.getElementById('importBtn');
 const importFile = document.getElementById('importFile');
 const importStatus = document.getElementById('importStatus');
+const exportBtn = document.getElementById('exportBtn');
+const levelTintToggle = document.getElementById('levelTintToggle');
 
 const DEFAULTS = ['CEO', 'Engineering', 'Design', 'Marketing', 'Sales'];
+const LEVEL_COLORS = [
+  '#1c2d4f',
+  '#22355b',
+  '#283c67',
+  '#2f4474',
+  '#374c81',
+  '#40548f',
+  '#4a5d9e'
+];
 
 // TreeNode
 class TreeNode {
@@ -154,11 +165,17 @@ function renderNode(node, container, depth) {
   wrapper.className = 'tree-node-wrapper';
   wrapper.dataset.nodeId = node.id;
   wrapper.dataset.depth = depth;
+  wrapper.style.setProperty('--depth', depth);
+  if (depth > 0) wrapper.classList.add('has-parent');
+  wrapper.classList.add(`depth-${Math.min(depth, LEVEL_COLORS.length - 1)}`);
   
   const card = document.createElement('div');
   card.className = 'tree-card';
   card.dataset.nodeId = node.id;
+  card.dataset.depth = depth;
   card.style.marginLeft = (depth * INDENT_SIZE) + 'px';
+  card.style.setProperty('--depth', depth);
+  card.classList.add(`depth-${Math.min(depth, LEVEL_COLORS.length - 1)}`);
   
   if (selectedId === node.id) card.classList.add('selected');
   
@@ -881,6 +898,91 @@ if (importBtn && importFile) {
       importFile.value = '';
     }
   };
+}
+
+function getMaxDepth(nodes, depth = 0) {
+  let maxDepth = depth;
+  nodes.forEach(node => {
+    maxDepth = Math.max(maxDepth, depth);
+    if (node.children.length) {
+      maxDepth = Math.max(maxDepth, getMaxDepth(node.children, depth + 1));
+    }
+  });
+  return maxDepth;
+}
+
+function buildExportRows(nodes, path = [], rows = []) {
+  nodes.forEach(node => {
+    const nextPath = [...path, node.name];
+    const depth = nextPath.length - 1;
+    rows.push({
+      path: nextPath,
+      depth,
+      color: LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length - 1)]
+    });
+    if (node.children.length) {
+      buildExportRows(node.children, nextPath, rows);
+    }
+  });
+  return rows;
+}
+
+function csvEscape(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function downloadCsv(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+if (exportBtn) {
+  exportBtn.onclick = () => {
+    if (!treeData.length) {
+      setImportStatus('Nothing to export yet.', 'error');
+      return;
+    }
+
+    const maxDepth = getMaxDepth(treeData, 0);
+    const rows = buildExportRows(treeData);
+    const headers = [];
+    for (let i = 0; i <= maxDepth; i++) {
+      headers.push(`Level ${i}`);
+    }
+    headers.push('Depth', 'Level Color');
+
+    const lines = [headers.map(csvEscape).join(',')];
+    rows.forEach(row => {
+      const line = [];
+      for (let i = 0; i <= maxDepth; i++) {
+        line.push(row.path[i] || '');
+      }
+      line.push(row.depth, row.color);
+      lines.push(line.map(csvEscape).join(','));
+    });
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`tree-export-${dateStamp}.csv`, lines.join('\n'));
+    setImportStatus(`Exported ${rows.length} rows with level colors.`, 'success');
+  };
+}
+
+if (levelTintToggle) {
+  document.body.classList.toggle('level-coloring', levelTintToggle.checked);
+  levelTintToggle.addEventListener('change', () => {
+    document.body.classList.toggle('level-coloring', levelTintToggle.checked);
+  });
 }
 
 // Zoom

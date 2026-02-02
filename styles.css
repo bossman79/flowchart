@@ -31,6 +31,13 @@
     linear-gradient(135deg, #141f35 0%, #1a2642 50%, #1f2f52 100%);
   --gradient-panel: linear-gradient(180deg, rgba(123, 176, 255, 0.08) 0%, rgba(20, 31, 53, 0.2) 100%);
   --gradient-card: linear-gradient(160deg, rgba(123, 176, 255, 0.08), rgba(20, 31, 53, 0.0) 55%);
+  --level-0: #1c2d4f;
+  --level-1: #22355b;
+  --level-2: #283c67;
+  --level-3: #2f4474;
+  --level-4: #374c81;
+  --level-5: #40548f;
+  --level-6: #4a5d9e;
 }
 
 body {
@@ -393,7 +400,8 @@ body {
 .zoom-controls {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .zoom-level {
@@ -401,6 +409,64 @@ body {
   color: var(--text-muted);
   min-width: 44px;
   text-align: center;
+}
+
+.level-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.level-toggle span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 38px;
+  height: 20px;
+  display: inline-flex;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 1px;
+  border-radius: 50%;
+  background: #dbe7ff;
+  transition: transform 0.2s ease;
+  box-shadow: 0 2px 6px rgba(9, 16, 32, 0.4);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(123, 176, 255, 0.35);
+  border-color: rgba(123, 176, 255, 0.55);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
 }
 
 .canvas-scroll {
@@ -461,6 +527,18 @@ body {
 
 .tree-node-wrapper {
   position: relative;
+  --depth: 0;
+}
+
+.tree-node-wrapper.has-parent::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--depth) * var(--indent) - (var(--indent) / 2));
+  width: 1px;
+  background: rgba(123, 176, 255, 0.18);
+  pointer-events: none;
 }
 
 /* Tree Card */
@@ -475,11 +553,51 @@ body {
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.2s ease, border-color 0.2s ease, margin-left 0.1s, transform 0.2s ease;
   position: relative;
+  z-index: 1;
 }
 
 .tree-card:hover {
   box-shadow: var(--shadow);
   transform: translateY(-1px);
+}
+
+.tree-node-wrapper.has-parent .tree-card::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: calc(-1 * (var(--indent) / 2));
+  width: calc(var(--indent) / 2);
+  height: 1px;
+  background: rgba(123, 176, 255, 0.25);
+  pointer-events: none;
+}
+
+body.level-coloring .tree-card.depth-0 {
+  background: var(--gradient-card), var(--level-0);
+}
+
+body.level-coloring .tree-card.depth-1 {
+  background: var(--gradient-card), var(--level-1);
+}
+
+body.level-coloring .tree-card.depth-2 {
+  background: var(--gradient-card), var(--level-2);
+}
+
+body.level-coloring .tree-card.depth-3 {
+  background: var(--gradient-card), var(--level-3);
+}
+
+body.level-coloring .tree-card.depth-4 {
+  background: var(--gradient-card), var(--level-4);
+}
+
+body.level-coloring .tree-card.depth-5 {
+  background: var(--gradient-card), var(--level-5);
+}
+
+body.level-coloring .tree-card.depth-6 {
+  background: var(--gradient-card), var(--level-6);
 }
 
 .tree-card.selected {
