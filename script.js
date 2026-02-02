@@ -596,8 +596,9 @@ sidebarToggle.addEventListener('click', () => {
 // Bank toggle
 bankToggle.addEventListener('click', (e) => {
   e.stopPropagation();
+  const bankSection = bankToggle.closest('.bank-section');
+  bankSection.classList.toggle('collapsed');
   bankToggle.classList.toggle('collapsed');
-  bankList.classList.toggle('collapsed');
 });
 
 // Form
