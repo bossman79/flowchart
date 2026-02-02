@@ -361,6 +361,13 @@ body {
   min-width: 100%;
   transform-origin: top left;
   transition: transform 0.15s ease;
+  border-radius: var(--radius);
+  border: 2px dashed transparent;
+}
+
+.tree-canvas.drop-active {
+  border-color: var(--accent);
+  background: var(--accent-light);
 }
 
 /* Empty State */
@@ -372,6 +379,7 @@ body {
   padding: 80px 20px;
   color: var(--text-light);
   text-align: center;
+  pointer-events: none;
 }
 
 .empty-state.hidden {

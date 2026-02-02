@@ -97,7 +97,9 @@ function getSiblings(node) {
 // Render
 function render() {
   treeList.innerHTML = '';
-  emptyState.classList.toggle('hidden', treeData.length > 0);
+  
+  const isEmpty = treeData.length === 0;
+  emptyState.classList.toggle('hidden', !isEmpty);
   
   treeData.forEach(node => {
     renderNode(node, treeList, 0);
@@ -266,17 +268,19 @@ function clearGhosts() {
     g.textContent = '';
   });
   document.getElementById('rootDropZone')?.classList.remove('active');
+  canvas.classList.remove('drop-active');
 }
 
 // Drag over
-document.addEventListener('dragover', (e) => {
+canvasScroll.addEventListener('dragover', (e) => {
   if (!dragSource) return;
   e.preventDefault();
+  e.dataTransfer.dropEffect = dragSource.type === 'bank' ? 'copy' : 'move';
   
   clearGhosts();
   
   const card = e.target.closest('.tree-card');
-  const rootZone = e.target.closest('.root-drop-zone');
+  const rootZone = document.getElementById('rootDropZone');
   
   if (card) {
     const targetId = parseInt(card.dataset.nodeId);
@@ -313,16 +317,27 @@ document.addEventListener('dragover', (e) => {
     }
   } else if (rootZone) {
     rootZone.classList.add('active');
+  } else {
+    // Empty canvas or outside cards - show canvas as drop target
+    canvas.classList.add('drop-active');
+  }
+});
+
+canvasScroll.addEventListener('dragleave', (e) => {
+  if (!canvasScroll.contains(e.relatedTarget)) {
+    clearGhosts();
   }
 });
 
 // Drop
-document.addEventListener('drop', (e) => {
+canvasScroll.addEventListener('drop', (e) => {
   if (!dragSource) return;
   e.preventDefault();
+  e.stopPropagation();
   
   const visibleGhost = document.querySelector('.drop-ghost.visible');
   const rootZone = document.getElementById('rootDropZone');
+  const isCanvasActive = canvas.classList.contains('drop-active');
   
   if (visibleGhost) {
     const targetId = parseInt(visibleGhost.dataset.targetId);
@@ -361,7 +376,7 @@ document.addEventListener('drop', (e) => {
     }
   }
   
-  if (rootZone?.classList.contains('active')) {
+  if (rootZone?.classList.contains('active') || isCanvasActive) {
     let newNode;
     if (dragSource.type === 'bank') {
       newNode = new TreeNode(dragSource.name);
