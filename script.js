@@ -3,8 +3,18 @@ let treeData = [];
 let nodeId = 0;
 let dragSource = null;
 let selectedId = null;
+let zoom = 1;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 1.5;
+const ZOOM_STEP = 0.1;
+
+// Child threshold: drag past this % from left edge = child
+const CHILD_THRESHOLD = 0.2; // 20% from left = easier to make child
 
 // DOM
+const sidebar = document.getElementById('sidebar');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const bankToggle = document.getElementById('bankToggle');
 const bankList = document.getElementById('bankList');
 const treeList = document.getElementById('treeList');
 const emptyState = document.getElementById('emptyState');
@@ -14,11 +24,16 @@ const clearBtn = document.getElementById('clearBtn');
 const expandBtn = document.getElementById('expandBtn');
 const collapseBtn = document.getElementById('collapseBtn');
 const canvas = document.getElementById('canvas');
+const canvasScroll = document.getElementById('canvasScroll');
+const zoomIn = document.getElementById('zoomIn');
+const zoomOut = document.getElementById('zoomOut');
+const zoomReset = document.getElementById('zoomReset');
+const zoomLevel = document.getElementById('zoomLevel');
 
-// Default bank items
+// Defaults
 const DEFAULTS = ['CEO', 'Engineering', 'Design', 'Marketing', 'Sales'];
 
-// TreeNode class
+// TreeNode
 class TreeNode {
   constructor(name) {
     this.id = nodeId++;
@@ -64,7 +79,7 @@ class TreeNode {
   }
 }
 
-// Find node by id
+// Find node
 function findNode(id, list = treeData) {
   for (const n of list) {
     if (n.id === id) return n;
@@ -74,7 +89,7 @@ function findNode(id, list = treeData) {
   return null;
 }
 
-// Get siblings array
+// Get siblings
 function getSiblings(node) {
   return node.parent ? node.parent.children : treeData;
 }
@@ -84,19 +99,20 @@ function render() {
   treeList.innerHTML = '';
   emptyState.classList.toggle('hidden', treeData.length > 0);
   
-  treeData.forEach((node, i) => {
+  treeData.forEach(node => {
     renderNode(node, treeList, 0);
   });
   
-  // Root drop zone
+  // Root drop zone at bottom
   const rootZone = document.createElement('div');
   rootZone.className = 'root-drop-zone';
   rootZone.id = 'rootDropZone';
   treeList.appendChild(rootZone);
+  
+  updateZoom();
 }
 
 function renderNode(node, container, depth) {
-  // Wrapper
   const wrapper = document.createElement('div');
   wrapper.className = 'tree-node-wrapper';
   wrapper.dataset.nodeId = node.id;
@@ -108,9 +124,7 @@ function renderNode(node, container, depth) {
   card.draggable = true;
   card.dataset.nodeId = node.id;
   
-  if (selectedId === node.id) {
-    card.classList.add('selected');
-  }
+  if (selectedId === node.id) card.classList.add('selected');
   
   // Toggle
   const toggle = document.createElement('button');
@@ -119,8 +133,8 @@ function renderNode(node, container, depth) {
   
   if (node.children.length > 0) {
     toggle.innerHTML = node.collapsed
-      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
-      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
     toggle.onclick = (e) => {
       e.stopPropagation();
       node.collapsed = !node.collapsed;
@@ -128,13 +142,17 @@ function renderNode(node, container, depth) {
     };
   } else {
     toggle.className += ' leaf';
-    toggle.innerHTML = '<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg>';
+    toggle.innerHTML = '<svg width="6" height="6" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg>';
   }
   
-  // Name
+  // Name (editable)
   const name = document.createElement('span');
   name.className = 'tree-card-name';
   name.textContent = node.name;
+  name.onclick = (e) => {
+    e.stopPropagation();
+    startEditing(name, node);
+  };
   
   // Count
   let count = null;
@@ -148,7 +166,7 @@ function renderNode(node, container, depth) {
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'tree-card-delete';
-  del.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  del.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
   del.onclick = (e) => {
     e.stopPropagation();
     node.remove();
@@ -160,12 +178,14 @@ function renderNode(node, container, depth) {
   if (count) card.appendChild(count);
   card.appendChild(del);
   
-  // Card events
-  card.onclick = () => {
+  // Select on click
+  card.onclick = (e) => {
+    if (e.target.classList.contains('tree-card-name')) return;
     selectedId = node.id;
     render();
   };
   
+  // Drag
   card.ondragstart = (e) => {
     dragSource = { type: 'tree', node };
     card.classList.add('dragging');
@@ -181,7 +201,7 @@ function renderNode(node, container, depth) {
   
   wrapper.appendChild(card);
   
-  // Drop ghost (appears below card)
+  // Ghost
   const ghost = document.createElement('div');
   ghost.className = 'drop-ghost';
   ghost.dataset.targetId = node.id;
@@ -193,7 +213,7 @@ function renderNode(node, container, depth) {
     childContainer.className = 'tree-children';
     if (node.collapsed) childContainer.classList.add('collapsed');
     
-    node.children.forEach((child) => {
+    node.children.forEach(child => {
       renderNode(child, childContainer, depth + 1);
     });
     
@@ -203,24 +223,60 @@ function renderNode(node, container, depth) {
   container.appendChild(wrapper);
 }
 
-// Clear all ghosts
+// Inline editing
+function startEditing(nameEl, node) {
+  nameEl.contentEditable = true;
+  nameEl.classList.add('editing');
+  nameEl.focus();
+  
+  // Select all text
+  const range = document.createRange();
+  range.selectNodeContents(nameEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  
+  const finishEditing = () => {
+    nameEl.contentEditable = false;
+    nameEl.classList.remove('editing');
+    const newName = nameEl.textContent.trim();
+    if (newName && newName !== node.name) {
+      node.name = newName;
+    } else {
+      nameEl.textContent = node.name;
+    }
+  };
+  
+  nameEl.onblur = finishEditing;
+  nameEl.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      nameEl.blur();
+    } else if (e.key === 'Escape') {
+      nameEl.textContent = node.name;
+      nameEl.blur();
+    }
+  };
+}
+
+// Clear ghosts
 function clearGhosts() {
   document.querySelectorAll('.drop-ghost').forEach(g => {
-    g.classList.remove('visible', 'child-level');
+    g.classList.remove('visible', 'as-child');
     g.textContent = '';
   });
   document.getElementById('rootDropZone')?.classList.remove('active');
 }
 
-// Drag over handling
+// Drag over
 document.addEventListener('dragover', (e) => {
   if (!dragSource) return;
   e.preventDefault();
   
   clearGhosts();
   
-  // Check if over a card
   const card = e.target.closest('.tree-card');
+  const rootZone = e.target.closest('.root-drop-zone');
   
   if (card) {
     const targetId = parseInt(card.dataset.nodeId);
@@ -228,7 +284,7 @@ document.addEventListener('dragover', (e) => {
     
     if (!targetNode) return;
     
-    // Can't drop on self or descendants
+    // Validate
     if (dragSource.type === 'tree') {
       if (dragSource.node.id === targetId) return;
       if (targetNode.isDescendantOf(dragSource.node)) return;
@@ -236,45 +292,37 @@ document.addEventListener('dragover', (e) => {
     
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const width = rect.width;
+    const pct = x / rect.width;
     
-    // Find the ghost for this card
     const wrapper = card.closest('.tree-node-wrapper');
-    const ghost = wrapper.querySelector('.drop-ghost');
+    const ghost = wrapper?.querySelector('.drop-ghost');
     
     if (ghost) {
       ghost.classList.add('visible');
       
-      // Left 1/3 = sibling, Right 2/3 = child
-      if (x < width / 3) {
-        ghost.classList.remove('child-level');
-        ghost.textContent = 'Insert as sibling';
+      // Left portion = sibling, rest = child
+      if (pct < CHILD_THRESHOLD) {
+        ghost.classList.remove('as-child');
+        ghost.textContent = 'Add as sibling';
         ghost.dataset.dropType = 'sibling';
       } else {
-        ghost.classList.add('child-level');
-        ghost.textContent = 'Insert as child';
+        ghost.classList.add('as-child');
+        ghost.textContent = 'Add as child';
         ghost.dataset.dropType = 'child';
       }
     }
-    
-    return;
-  }
-  
-  // Check if over canvas but not over a card
-  const isOverCanvas = e.target.closest('.tree-canvas');
-  if (isOverCanvas) {
-    const rootZone = document.getElementById('rootDropZone');
-    if (rootZone) rootZone.classList.add('active');
+  } else if (rootZone) {
+    rootZone.classList.add('active');
   }
 });
 
-// Drop handling
+// Drop
 document.addEventListener('drop', (e) => {
   if (!dragSource) return;
   e.preventDefault();
   
-  // Find visible ghost
   const visibleGhost = document.querySelector('.drop-ghost.visible');
+  const rootZone = document.getElementById('rootDropZone');
   
   if (visibleGhost) {
     const targetId = parseInt(visibleGhost.dataset.targetId);
@@ -287,17 +335,8 @@ document.addEventListener('drop', (e) => {
       if (dragSource.type === 'bank') {
         newNode = new TreeNode(dragSource.name);
       } else {
-        // Validate
-        if (dragSource.node.id === targetId) {
-          clearGhosts();
-          dragSource = null;
-          return;
-        }
-        if (targetNode.isDescendantOf(dragSource.node)) {
-          clearGhosts();
-          dragSource = null;
-          return;
-        }
+        if (dragSource.node.id === targetId) return cleanup();
+        if (targetNode.isDescendantOf(dragSource.node)) return cleanup();
         newNode = dragSource.node;
         newNode.remove();
       }
@@ -306,7 +345,6 @@ document.addEventListener('drop', (e) => {
         targetNode.collapsed = false;
         targetNode.addChild(newNode, 0);
       } else {
-        // Sibling - insert after target
         const siblings = getSiblings(targetNode);
         const idx = siblings.indexOf(targetNode);
         if (targetNode.parent) {
@@ -317,36 +355,33 @@ document.addEventListener('drop', (e) => {
         }
       }
       
-      clearGhosts();
-      dragSource = null;
+      cleanup();
       render();
       return;
     }
   }
   
-  // Root drop zone
-  const rootZone = document.getElementById('rootDropZone');
   if (rootZone?.classList.contains('active')) {
     let newNode;
-    
     if (dragSource.type === 'bank') {
       newNode = new TreeNode(dragSource.name);
     } else {
       newNode = dragSource.node;
       newNode.remove();
     }
-    
     newNode.parent = null;
     treeData.push(newNode);
-    
-    clearGhosts();
-    dragSource = null;
+    cleanup();
     render();
     return;
   }
   
-  clearGhosts();
-  dragSource = null;
+  cleanup();
+  
+  function cleanup() {
+    clearGhosts();
+    dragSource = null;
+  }
 });
 
 // Bank item
@@ -357,7 +392,7 @@ function createBankItem(name) {
   
   const grip = document.createElement('span');
   grip.className = 'bank-item-grip';
-  grip.innerHTML = '<svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="8" cy="2" r="1.5"/><circle cx="2" cy="7" r="1.5"/><circle cx="8" cy="7" r="1.5"/><circle cx="2" cy="12" r="1.5"/><circle cx="8" cy="12" r="1.5"/></svg>';
+  grip.innerHTML = '<svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor"><circle cx="2" cy="2" r="1.5"/><circle cx="6" cy="2" r="1.5"/><circle cx="2" cy="6" r="1.5"/><circle cx="6" cy="6" r="1.5"/><circle cx="2" cy="10" r="1.5"/><circle cx="6" cy="10" r="1.5"/></svg>';
   
   const nameEl = document.createElement('span');
   nameEl.className = 'bank-item-name';
@@ -366,7 +401,7 @@ function createBankItem(name) {
   const del = document.createElement('button');
   del.type = 'button';
   del.className = 'bank-item-delete';
-  del.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  del.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>';
   del.onclick = (e) => {
     e.stopPropagation();
     item.remove();
@@ -390,6 +425,17 @@ function createBankItem(name) {
   bankList.appendChild(item);
 }
 
+// Sidebar toggle
+sidebarToggle.onclick = () => {
+  sidebar.classList.toggle('collapsed');
+};
+
+// Bank toggle
+bankToggle.onclick = () => {
+  bankToggle.classList.toggle('collapsed');
+  bankList.classList.toggle('collapsed');
+};
+
 // Form
 createForm.onsubmit = (e) => {
   e.preventDefault();
@@ -403,37 +449,59 @@ createForm.onsubmit = (e) => {
 // Actions
 clearBtn.onclick = () => {
   if (treeData.length === 0) return;
-  if (!confirm('Clear entire tree?')) return;
+  if (!confirm('Clear the entire tree?')) return;
   treeData = [];
   selectedId = null;
   render();
 };
 
 expandBtn.onclick = () => {
-  const expandAll = (nodes) => {
-    nodes.forEach(n => {
-      n.collapsed = false;
-      expandAll(n.children);
-    });
-  };
-  expandAll(treeData);
+  const expand = (nodes) => nodes.forEach(n => {
+    n.collapsed = false;
+    expand(n.children);
+  });
+  expand(treeData);
   render();
 };
 
 collapseBtn.onclick = () => {
-  const collapseAll = (nodes) => {
-    nodes.forEach(n => {
-      if (n.children.length) n.collapsed = true;
-      collapseAll(n.children);
-    });
-  };
-  collapseAll(treeData);
+  const collapse = (nodes) => nodes.forEach(n => {
+    if (n.children.length) n.collapsed = true;
+    collapse(n.children);
+  });
+  collapse(treeData);
   render();
+};
+
+// Zoom
+function updateZoom() {
+  canvas.style.transform = `scale(${zoom})`;
+  zoomLevel.textContent = Math.round(zoom * 100) + '%';
+  
+  // Adjust canvas size for scrolling
+  canvas.style.minWidth = (100 / zoom) + '%';
+  canvas.style.minHeight = (100 / zoom) + '%';
+}
+
+zoomIn.onclick = () => {
+  zoom = Math.min(ZOOM_MAX, zoom + ZOOM_STEP);
+  updateZoom();
+};
+
+zoomOut.onclick = () => {
+  zoom = Math.max(ZOOM_MIN, zoom - ZOOM_STEP);
+  updateZoom();
+};
+
+zoomReset.onclick = () => {
+  zoom = 1;
+  updateZoom();
 };
 
 // Keyboard
 document.onkeydown = (e) => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.contentEditable === 'true') return;
+  
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
     const node = findNode(selectedId);
     if (node) {
@@ -442,11 +510,25 @@ document.onkeydown = (e) => {
       render();
     }
   }
+  
+  // Zoom shortcuts
+  if ((e.ctrlKey || e.metaKey) && e.key === '=') {
+    e.preventDefault();
+    zoomIn.click();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+    e.preventDefault();
+    zoomOut.click();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+    e.preventDefault();
+    zoomReset.click();
+  }
 };
 
-// Click outside
-canvas.onclick = (e) => {
-  if (!e.target.closest('.tree-card')) {
+// Click outside to deselect
+canvasScroll.onclick = (e) => {
+  if (!e.target.closest('.tree-card') && !e.target.closest('.root-drop-zone')) {
     selectedId = null;
     render();
   }
