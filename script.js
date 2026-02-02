@@ -917,8 +917,7 @@ function buildExportRows(nodes, path = [], rows = []) {
     const depth = nextPath.length - 1;
     rows.push({
       path: nextPath,
-      depth,
-      color: LEVEL_COLORS[Math.min(depth, LEVEL_COLORS.length - 1)]
+      depth
     });
     if (node.children.length) {
       buildExportRows(node.children, nextPath, rows);
@@ -927,24 +926,24 @@ function buildExportRows(nodes, path = [], rows = []) {
   return rows;
 }
 
-function csvEscape(value) {
-  const text = value === null || value === undefined ? '' : String(value);
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
+function hexToArgb(hex) {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3
+    ? clean.split('').map(ch => ch + ch).join('')
+    : clean;
+  return `FF${full.toUpperCase()}`;
 }
 
-function downloadCsv(filename, content) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+function lightenColor(hex, ratio = 0.65) {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  const nr = Math.round(r + (255 - r) * ratio);
+  const ng = Math.round(g + (255 - g) * ratio);
+  const nb = Math.round(b + (255 - b) * ratio);
+  const toHex = (value) => value.toString(16).padStart(2, '0');
+  return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
 }
 
 if (exportBtn) {
@@ -956,25 +955,52 @@ if (exportBtn) {
 
     const maxDepth = getMaxDepth(treeData, 0);
     const rows = buildExportRows(treeData);
-    const headers = [];
-    for (let i = 0; i <= maxDepth; i++) {
-      headers.push(`Level ${i}`);
-    }
-    headers.push('Depth', 'Level Color');
+    const headers = Array.from({ length: maxDepth + 1 }, (_, idx) => `Level ${idx}`);
 
-    const lines = [headers.map(csvEscape).join(',')];
+    const data = [headers];
     rows.forEach(row => {
-      const line = [];
-      for (let i = 0; i <= maxDepth; i++) {
-        line.push(row.path[i] || '');
-      }
-      line.push(row.depth, row.color);
-      lines.push(line.map(csvEscape).join(','));
+      const line = new Array(maxDepth + 1).fill('');
+      row.path.forEach((value, idx) => {
+        line[idx] = value;
+      });
+      data.push(line);
     });
 
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Hierarchy');
+
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFFFF' } },
+      fill: { fgColor: { rgb: 'FF2A3F6B' } },
+      alignment: { vertical: 'center' }
+    };
+    const levelStyles = LEVEL_COLORS.map(color => ({
+      font: { color: { rgb: 'FF0B152B' } },
+      fill: { fgColor: { rgb: hexToArgb(lightenColor(color)) } },
+      alignment: { vertical: 'center' }
+    }));
+
+    for (let c = 0; c <= maxDepth; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+      if (worksheet[cellRef]) worksheet[cellRef].s = headerStyle;
+    }
+
+    for (let r = 1; r < data.length; r++) {
+      for (let c = 0; c <= maxDepth; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r, c });
+        const cell = worksheet[cellRef];
+        if (cell && cell.v !== undefined && cell.v !== '') {
+          cell.s = levelStyles[Math.min(c, levelStyles.length - 1)];
+        }
+      }
+    }
+
+    worksheet['!cols'] = Array.from({ length: maxDepth + 1 }, () => ({ wch: 28 }));
+
     const dateStamp = new Date().toISOString().slice(0, 10);
-    downloadCsv(`tree-export-${dateStamp}.csv`, lines.join('\n'));
-    setImportStatus(`Exported ${rows.length} rows with level colors.`, 'success');
+    XLSX.writeFile(workbook, `tree-export-${dateStamp}.xlsx`, { compression: true });
+    setImportStatus(`Exported ${rows.length} rows to Excel.`, 'success');
   };
 }
 
