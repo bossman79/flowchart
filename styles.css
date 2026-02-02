@@ -212,6 +212,11 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
+}
+
+.bank-section .section-header {
+  flex-shrink: 0;
 }
 
 .bank-list {
@@ -220,10 +225,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
 }
 
 .bank-list.collapsed {
   display: none;
+}
+
+.bank-section:has(.bank-list.collapsed) {
+  flex: 0 0 auto;
 }
 
 .bank-item {

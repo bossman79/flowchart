@@ -589,13 +589,16 @@ function createBankItem(name) {
 }
 
 // Sidebar toggle
-sidebarToggle.onclick = () => sidebar.classList.toggle('collapsed');
+sidebarToggle.addEventListener('click', () => {
+  sidebar.classList.toggle('collapsed');
+});
 
 // Bank toggle
-bankToggle.onclick = () => {
+bankToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
   bankToggle.classList.toggle('collapsed');
   bankList.classList.toggle('collapsed');
-};
+});
 
 // Form
 createForm.onsubmit = (e) => {
