@@ -36,13 +36,13 @@ const exportBtn = document.getElementById('exportBtn');
 const levelTintToggle = document.getElementById('levelTintToggle');
 
 const LEVEL_COLORS = [
-  '#25355f',
-  '#245c5b',
-  '#36406d',
-  '#2f5a70',
-  '#3f4b78',
-  '#3b5a4f',
-  '#4a4f7f'
+  '#22304d',
+  '#2a3b60',
+  '#344874',
+  '#3d5688',
+  '#47649d',
+  '#5072b1',
+  '#5a80c6'
 ];
 
 // TreeNode
@@ -351,9 +351,34 @@ function moveNode(node, direction) {
   if (idx === -1) return;
   const targetIdx = idx + direction;
   if (targetIdx < 0 || targetIdx >= siblings.length) return;
+  const previousPositions = captureCardPositions();
   siblings.splice(idx, 1);
   siblings.splice(targetIdx, 0, node);
   render();
+  requestAnimationFrame(() => animateCardPositions(previousPositions));
+}
+
+function captureCardPositions() {
+  const positions = new Map();
+  document.querySelectorAll('.tree-card').forEach(card => {
+    const rect = card.getBoundingClientRect();
+    positions.set(card.dataset.nodeId, rect);
+  });
+  return positions;
+}
+
+function animateCardPositions(previousPositions) {
+  document.querySelectorAll('.tree-card').forEach(card => {
+    const prev = previousPositions.get(card.dataset.nodeId);
+    if (!prev) return;
+    const next = card.getBoundingClientRect();
+    const deltaY = prev.top - next.top;
+    if (Math.abs(deltaY) < 2) return;
+    card.animate(
+      [{ transform: `translateY(${deltaY}px)` }, { transform: 'translateY(0)' }],
+      { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+    );
+  });
 }
 
 // Reposition drag (drag left edge to change hierarchy)
@@ -1014,14 +1039,17 @@ if (exportBtn) {
 
     const maxDepth = getMaxDepth(treeData, 0);
     const rows = buildExportRows(treeData);
-    const headers = Array.from({ length: maxDepth + 1 }, (_, idx) => `Level ${idx}`);
+    const exportDepth = Math.max(maxDepth, 3);
+    const headers = Array.from({ length: exportDepth + 1 }, (_, idx) => `Level ${idx}`);
+    headers.push('Type', '', '');
 
     const lines = [headers.map(csvEscape).join(',')];
     rows.forEach(row => {
-      const line = new Array(maxDepth + 1).fill('');
+      const line = new Array(exportDepth + 1).fill('');
       row.path.forEach((value, idx) => {
-        line[idx] = value;
+        if (idx <= exportDepth) line[idx] = value;
       });
+      line.push('', '', '');
       lines.push(line.map(csvEscape).join(','));
     });
 
