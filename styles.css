@@ -31,13 +31,13 @@
     linear-gradient(135deg, #141f35 0%, #1a2642 50%, #1f2f52 100%);
   --gradient-panel: linear-gradient(180deg, rgba(123, 176, 255, 0.08) 0%, rgba(20, 31, 53, 0.2) 100%);
   --gradient-card: linear-gradient(160deg, rgba(123, 176, 255, 0.08), rgba(20, 31, 53, 0.0) 55%);
-  --level-0: #1c2d4f;
-  --level-1: #22355b;
-  --level-2: #283c67;
-  --level-3: #2f4474;
-  --level-4: #374c81;
-  --level-5: #40548f;
-  --level-6: #4a5d9e;
+  --level-0: #25355f;
+  --level-1: #245c5b;
+  --level-2: #36406d;
+  --level-3: #2f5a70;
+  --level-4: #3f4b78;
+  --level-5: #3b5a4f;
+  --level-6: #4a4f7f;
 }
 
 body {
@@ -554,6 +554,7 @@ body {
   transition: box-shadow 0.2s ease, border-color 0.2s ease, margin-left 0.1s, transform 0.2s ease;
   position: relative;
   z-index: 1;
+  width: clamp(260px, 52%, 560px);
 }
 
 .tree-card:hover {

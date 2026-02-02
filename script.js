@@ -35,15 +35,14 @@ const importStatus = document.getElementById('importStatus');
 const exportBtn = document.getElementById('exportBtn');
 const levelTintToggle = document.getElementById('levelTintToggle');
 
-const DEFAULTS = ['CEO', 'Engineering', 'Design', 'Marketing', 'Sales'];
 const LEVEL_COLORS = [
-  '#1c2d4f',
-  '#22355b',
-  '#283c67',
-  '#2f4474',
-  '#374c81',
-  '#40548f',
-  '#4a5d9e'
+  '#25355f',
+  '#245c5b',
+  '#36406d',
+  '#2f5a70',
+  '#3f4b78',
+  '#3b5a4f',
+  '#4a4f7f'
 ];
 
 // TreeNode
@@ -636,6 +635,27 @@ function createBankItem(name) {
   bankList.appendChild(item);
 }
 
+function clearBankItems() {
+  bankList.innerHTML = '';
+}
+
+function populateBankFromTree(nodes) {
+  const names = [];
+  const seen = new Set();
+  const walk = (list) => {
+    list.forEach(node => {
+      if (!seen.has(node.name)) {
+        seen.add(node.name);
+        names.push(node.name);
+      }
+      if (node.children.length) walk(node.children);
+    });
+  };
+  walk(nodes);
+  clearBankItems();
+  names.forEach(name => createBankItem(name));
+}
+
 // Sidebar toggle
 sidebarToggle.addEventListener('click', () => {
   sidebar.classList.toggle('collapsed');
@@ -888,6 +908,7 @@ if (importBtn && importFile) {
 
       treeData = nextTree;
       selectedId = null;
+      populateBankFromTree(treeData);
       render();
 
       setImportStatus(`Imported ${countNodes(treeData)} nodes from ${file.name}.`, 'success');
@@ -953,6 +974,13 @@ if (exportBtn) {
       return;
     }
 
+    if (!window.XLSX || !XLSX.utils || !XLSX.writeFile) {
+      setImportStatus('Export needs the XLSX library to load.', 'error');
+      return;
+    }
+
+    setImportStatus('Preparing Excel export...');
+
     const maxDepth = getMaxDepth(treeData, 0);
     const rows = buildExportRows(treeData);
     const headers = Array.from({ length: maxDepth + 1 }, (_, idx) => `Level ${idx}`);
@@ -977,7 +1005,7 @@ if (exportBtn) {
     };
     const levelStyles = LEVEL_COLORS.map(color => ({
       font: { color: { rgb: 'FF0B152B' } },
-      fill: { fgColor: { rgb: hexToArgb(lightenColor(color)) } },
+      fill: { fgColor: { rgb: hexToArgb(lightenColor(color, 0.45)) } },
       alignment: { vertical: 'center' }
     }));
 
@@ -999,8 +1027,12 @@ if (exportBtn) {
     worksheet['!cols'] = Array.from({ length: maxDepth + 1 }, () => ({ wch: 28 }));
 
     const dateStamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `tree-export-${dateStamp}.xlsx`, { compression: true });
-    setImportStatus(`Exported ${rows.length} rows to Excel.`, 'success');
+    try {
+      XLSX.writeFile(workbook, `tree-export-${dateStamp}.xlsx`, { compression: true });
+      setImportStatus(`Exported ${rows.length} rows to Excel.`, 'success');
+    } catch (err) {
+      setImportStatus('Export failed. Please try again.', 'error');
+    }
   };
 }
 
@@ -1046,5 +1078,4 @@ canvasScroll.onclick = (e) => {
 };
 
 // Init
-DEFAULTS.forEach(n => createBankItem(n));
 render();
