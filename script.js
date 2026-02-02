@@ -29,8 +29,21 @@ const zoomIn = document.getElementById('zoomIn');
 const zoomOut = document.getElementById('zoomOut');
 const zoomReset = document.getElementById('zoomReset');
 const zoomLevel = document.getElementById('zoomLevel');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+const importStatus = document.getElementById('importStatus');
+const exportBtn = document.getElementById('exportBtn');
+const levelTintToggle = document.getElementById('levelTintToggle');
 
-const DEFAULTS = ['CEO', 'Engineering', 'Design', 'Marketing', 'Sales'];
+const LEVEL_COLORS = [
+  '#22304d',
+  '#2a3b60',
+  '#344874',
+  '#3d5688',
+  '#47649d',
+  '#5072b1',
+  '#5a80c6'
+];
 
 // TreeNode
 class TreeNode {
@@ -151,11 +164,17 @@ function renderNode(node, container, depth) {
   wrapper.className = 'tree-node-wrapper';
   wrapper.dataset.nodeId = node.id;
   wrapper.dataset.depth = depth;
+  wrapper.style.setProperty('--depth', depth);
+  if (depth > 0) wrapper.classList.add('has-parent');
+  wrapper.classList.add(`depth-${Math.min(depth, LEVEL_COLORS.length - 1)}`);
   
   const card = document.createElement('div');
   card.className = 'tree-card';
   card.dataset.nodeId = node.id;
+  card.dataset.depth = depth;
   card.style.marginLeft = (depth * INDENT_SIZE) + 'px';
+  card.style.setProperty('--depth', depth);
+  card.classList.add(`depth-${Math.min(depth, LEVEL_COLORS.length - 1)}`);
   
   if (selectedId === node.id) card.classList.add('selected');
   
@@ -219,6 +238,50 @@ function renderNode(node, container, depth) {
     if (selectedId === node.id) selectedId = null;
     render();
   };
+  del.onmousedown = (e) => e.stopPropagation();
+
+  // Quick add child
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'tree-card-add';
+  addBtn.title = 'Add child node';
+  addBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
+  addBtn.onclick = (e) => {
+    e.stopPropagation();
+    addChildNode(node);
+  };
+  addBtn.onmousedown = (e) => e.stopPropagation();
+
+  const moveUp = document.createElement('button');
+  moveUp.type = 'button';
+  moveUp.className = 'tree-card-move';
+  moveUp.title = 'Move up';
+  moveUp.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>';
+  moveUp.onclick = (e) => {
+    e.stopPropagation();
+    moveNode(node, -1);
+  };
+  moveUp.onmousedown = (e) => e.stopPropagation();
+
+  const moveDown = document.createElement('button');
+  moveDown.type = 'button';
+  moveDown.className = 'tree-card-move';
+  moveDown.title = 'Move down';
+  moveDown.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+  moveDown.onclick = (e) => {
+    e.stopPropagation();
+    moveNode(node, 1);
+  };
+  moveDown.onmousedown = (e) => e.stopPropagation();
+
+  const siblings = getSiblings(node);
+  const idx = siblings.indexOf(node);
+  moveUp.disabled = idx <= 0;
+  moveDown.disabled = idx === siblings.length - 1;
+
+  const actions = document.createElement('div');
+  actions.className = 'tree-card-actions';
+  actions.append(moveUp, moveDown, addBtn, del);
   
   // Card content wrapper (draggable for moving between cards)
   const content = document.createElement('div');
@@ -240,9 +303,8 @@ function renderNode(node, container, depth) {
   
   content.append(toggle, name);
   if (count) content.appendChild(count);
-  content.appendChild(del);
   
-  card.append(dragHandle, content);
+  card.append(dragHandle, content, actions);
   
   // Select on click
   card.onclick = () => {
@@ -269,6 +331,54 @@ function renderNode(node, container, depth) {
   }
   
   container.appendChild(wrapper);
+}
+
+function addChildNode(parentNode) {
+  const newNode = new TreeNode('New Node');
+  parentNode.collapsed = false;
+  parentNode.addChild(newNode, 0);
+  selectedId = newNode.id;
+  render();
+  requestAnimationFrame(() => {
+    const nameEl = document.querySelector(`.tree-card[data-node-id="${newNode.id}"] .tree-card-name`);
+    if (nameEl) startEditing(nameEl, newNode);
+  });
+}
+
+function moveNode(node, direction) {
+  const siblings = getSiblings(node);
+  const idx = siblings.indexOf(node);
+  if (idx === -1) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= siblings.length) return;
+  const previousPositions = captureCardPositions();
+  siblings.splice(idx, 1);
+  siblings.splice(targetIdx, 0, node);
+  render();
+  requestAnimationFrame(() => animateCardPositions(previousPositions));
+}
+
+function captureCardPositions() {
+  const positions = new Map();
+  document.querySelectorAll('.tree-card').forEach(card => {
+    const rect = card.getBoundingClientRect();
+    positions.set(card.dataset.nodeId, rect);
+  });
+  return positions;
+}
+
+function animateCardPositions(previousPositions) {
+  document.querySelectorAll('.tree-card').forEach(card => {
+    const prev = previousPositions.get(card.dataset.nodeId);
+    if (!prev) return;
+    const next = card.getBoundingClientRect();
+    const deltaY = prev.top - next.top;
+    if (Math.abs(deltaY) < 2) return;
+    card.animate(
+      [{ transform: `translateY(${deltaY}px)` }, { transform: 'translateY(0)' }],
+      { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
+    );
+  });
 }
 
 // Reposition drag (drag left edge to change hierarchy)
@@ -588,6 +698,27 @@ function createBankItem(name) {
   bankList.appendChild(item);
 }
 
+function clearBankItems() {
+  bankList.innerHTML = '';
+}
+
+function populateBankFromTree(nodes) {
+  const names = [];
+  const seen = new Set();
+  const walk = (list) => {
+    list.forEach(node => {
+      if (!seen.has(node.name)) {
+        seen.add(node.name);
+        names.push(node.name);
+      }
+      if (node.children.length) walk(node.children);
+    });
+  };
+  walk(nodes);
+  clearBankItems();
+  names.forEach(name => createBankItem(name));
+}
+
 // Sidebar toggle
 sidebarToggle.addEventListener('click', () => {
   sidebar.classList.toggle('collapsed');
@@ -632,6 +763,308 @@ collapseBtn.onclick = () => {
   render();
 };
 
+// Import
+function setImportStatus(message, type = '') {
+  if (!importStatus) return;
+  importStatus.textContent = message;
+  importStatus.classList.remove('success', 'error');
+  if (type) importStatus.classList.add(type);
+}
+
+function sheetToRows(workbook) {
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet) return [];
+  const worksheet = workbook.Sheets[firstSheet];
+  return XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && next === '\n') i++;
+      row.push(field);
+      if (row.some(cell => String(cell).trim() !== '')) {
+        rows.push(row);
+      }
+      row = [];
+      field = '';
+      continue;
+    }
+
+    if (!inQuotes && char === ',') {
+      row.push(field);
+      field = '';
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field);
+  if (row.some(cell => String(cell).trim() !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+async function parseImportFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'csv') {
+    const text = await file.text();
+    if (window.XLSX) {
+      const workbook = XLSX.read(text, { type: 'string' });
+      return sheetToRows(workbook);
+    }
+    return parseCsvRows(text);
+  }
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    if (!window.XLSX) {
+      throw new Error('XLSX parser not available.');
+    }
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    return sheetToRows(workbook);
+  }
+
+  throw new Error('Unsupported file type.');
+}
+
+function getLevelIndexes(headerRow) {
+  const indexes = [];
+  headerRow.forEach((header, idx) => {
+    const label = String(header || '').trim();
+    if (/^level\s*\d+/i.test(label)) {
+      indexes.push(idx);
+    }
+  });
+
+  if (indexes.length > 0) return indexes;
+
+  const fallback = [];
+  headerRow.forEach((header, idx) => {
+    const label = String(header || '').trim().toLowerCase();
+    if (!label || label === 'type') return;
+    fallback.push(idx);
+  });
+
+  if (fallback.length > 0) return fallback;
+
+  return [0, 1, 2, 3];
+}
+
+function buildTreeFromRows(rows) {
+  if (!rows.length) return [];
+
+  const headerRow = rows[0] || [];
+  const headerLabels = headerRow.map(cell => String(cell || '').trim());
+  const hasLevelHeaders = headerLabels.some(label => /^level\s*\d+/i.test(label));
+  const levelIndexes = getLevelIndexes(headerLabels);
+  const startRow = hasLevelHeaders ? 1 : 0;
+
+  const roots = [];
+  const current = new Array(levelIndexes.length).fill('');
+
+  const addPath = (path) => {
+    let list = roots;
+    let parent = null;
+    path.forEach(name => {
+      let node = list.find(n => n.name === name);
+      if (!node) {
+        node = new TreeNode(name);
+        if (parent) {
+          parent.addChild(node);
+        } else {
+          node.parent = null;
+          roots.push(node);
+        }
+      }
+      parent = node;
+      list = node.children;
+    });
+  };
+
+  for (let i = startRow; i < rows.length; i++) {
+    const row = rows[i] || [];
+    let rowHasValue = false;
+
+    levelIndexes.forEach((colIndex, levelIdx) => {
+      const value = String(row[colIndex] || '').trim();
+      if (value) {
+        rowHasValue = true;
+        current[levelIdx] = value;
+        for (let j = levelIdx + 1; j < current.length; j++) {
+          current[j] = '';
+        }
+      }
+    });
+
+    if (!rowHasValue) continue;
+
+    const path = [];
+    for (let j = 0; j < current.length; j++) {
+      if (!current[j]) break;
+      path.push(current[j]);
+    }
+
+    if (path.length) addPath(path);
+  }
+
+  return roots;
+}
+
+function countNodes(nodes) {
+  let count = 0;
+  nodes.forEach(node => {
+    count += 1;
+    if (node.children.length) count += countNodes(node.children);
+  });
+  return count;
+}
+
+if (importBtn && importFile) {
+  importBtn.onclick = () => importFile.click();
+  importFile.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const previousNodeId = nodeId;
+    setImportStatus(`Loading ${file.name}...`);
+
+    try {
+      const rows = await parseImportFile(file);
+      nodeId = 0;
+      const nextTree = buildTreeFromRows(rows);
+      if (!nextTree.length) {
+        setImportStatus('No nodes found in the import file.', 'error');
+        nodeId = previousNodeId;
+        importFile.value = '';
+        return;
+      }
+
+      if (!confirm('Replace the current tree with the imported hierarchy?')) {
+        setImportStatus('Import canceled.');
+        nodeId = previousNodeId;
+        importFile.value = '';
+        return;
+      }
+
+      treeData = nextTree;
+      selectedId = null;
+      populateBankFromTree(treeData);
+      render();
+
+      setImportStatus(`Imported ${countNodes(treeData)} nodes from ${file.name}.`, 'success');
+    } catch (err) {
+      nodeId = previousNodeId;
+      setImportStatus(err.message || 'Import failed.', 'error');
+    } finally {
+      importFile.value = '';
+    }
+  };
+}
+
+function getMaxDepth(nodes, depth = 0) {
+  let maxDepth = depth;
+  nodes.forEach(node => {
+    maxDepth = Math.max(maxDepth, depth);
+    if (node.children.length) {
+      maxDepth = Math.max(maxDepth, getMaxDepth(node.children, depth + 1));
+    }
+  });
+  return maxDepth;
+}
+
+function buildExportRows(nodes, path = [], rows = []) {
+  nodes.forEach(node => {
+    const nextPath = [...path, node.name];
+    const depth = nextPath.length - 1;
+    rows.push({
+      path: nextPath,
+      depth
+    });
+    if (node.children.length) {
+      buildExportRows(node.children, nextPath, rows);
+    }
+  });
+  return rows;
+}
+
+function csvEscape(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function downloadCsv(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+if (exportBtn) {
+  exportBtn.onclick = () => {
+    if (!treeData.length) {
+      setImportStatus('Nothing to export yet.', 'error');
+      return;
+    }
+
+    const maxDepth = getMaxDepth(treeData, 0);
+    const rows = buildExportRows(treeData);
+    const exportDepth = Math.max(maxDepth, 3);
+    const headers = Array.from({ length: exportDepth + 1 }, (_, idx) => `Level ${idx}`);
+    headers.push('Type', '', '');
+
+    const lines = [headers.map(csvEscape).join(',')];
+    rows.forEach(row => {
+      const line = new Array(exportDepth + 1).fill('');
+      const depthIndex = Math.min(row.depth, exportDepth);
+      line[depthIndex] = row.path[row.path.length - 1] || '';
+      line.push('', '', '');
+      lines.push(line.map(csvEscape).join(','));
+    });
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`tree-export-${dateStamp}.csv`, lines.join('\n'));
+    setImportStatus(`Exported ${rows.length} rows to CSV.`, 'success');
+  };
+}
+
+if (levelTintToggle) {
+  document.body.classList.toggle('level-coloring', levelTintToggle.checked);
+  levelTintToggle.addEventListener('change', () => {
+    document.body.classList.toggle('level-coloring', levelTintToggle.checked);
+  });
+}
+
 // Zoom
 function updateZoom() {
   canvas.style.transform = `scale(${zoom})`;
@@ -667,5 +1100,4 @@ canvasScroll.onclick = (e) => {
 };
 
 // Init
-DEFAULTS.forEach(n => createBankItem(n));
 render();
