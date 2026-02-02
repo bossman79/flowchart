@@ -501,12 +501,14 @@ function handleDrop(e) {
 
 // Handle drop on canvas (for root level)
 function handleCanvasDragOver(e) {
-  // Only handle if not over a node
-  if (e.target === canvas || e.target.classList.contains("tree-container") || e.target.classList.contains("canvas-placeholder")) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    canvas.classList.add("is-drop-target");
+  // Check if we're over a tree node - if so, let the node handle it
+  if (e.target.closest(".tree-node")) {
+    return;
   }
+  
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+  canvas.classList.add("is-drop-target");
 }
 
 function handleCanvasDragLeave(e) {
@@ -516,25 +518,25 @@ function handleCanvasDragLeave(e) {
 }
 
 function handleCanvasDrop(e) {
-  // Check if we're dropping on the canvas background (not on a node)
-  if (e.target !== canvas && !e.target.classList.contains("tree-container") && !e.target.classList.contains("canvas-placeholder")) {
+  // If dropping on a tree node, let the node handle it
+  if (e.target.closest(".tree-node")) {
     return;
   }
 
   e.preventDefault();
+  e.stopPropagation();
   canvas.classList.remove("is-drop-target");
 
-  const name = e.dataTransfer.getData("text/plain").trim();
-  if (!name) return;
+  const data = e.dataTransfer.getData("text/plain").trim();
+  if (!data) return;
 
-  // Check if it's a bank item (name) or a tree node (id)
-  const nodeId = parseInt(name);
-  if (!isNaN(nodeId) && draggedNode) {
+  // Check if it's from the tree (draggedNode exists) or from the bank
+  if (draggedNode) {
     // Moving existing node to root
     insertAtRoot(draggedNode);
   } else {
-    // New node from bank
-    const newNode = new TreeNode(name);
+    // New node from bank - data is the name
+    const newNode = new TreeNode(data);
     treeData.push(newNode);
   }
 
@@ -554,9 +556,10 @@ function addBankItem(name) {
   item.draggable = true;
   item.dataset.name = name;
 
+  // Drag handle icon (grip lines)
   const handle = document.createElement("span");
   handle.className = "drag-handle";
-  handle.textContent = "drag";
+  handle.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>';
 
   const label = document.createElement("span");
   label.className = "bank-name";
@@ -565,7 +568,7 @@ function addBankItem(name) {
   const removeButton = document.createElement("button");
   removeButton.type = "button";
   removeButton.className = "bank-delete";
-  removeButton.textContent = "Remove";
+  removeButton.innerHTML = "&times;";
   removeButton.setAttribute("aria-label", `Remove ${name}`);
 
   removeButton.addEventListener("click", () => {

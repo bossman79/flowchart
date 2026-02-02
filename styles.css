@@ -435,10 +435,16 @@ input[type="text"].input-error {
 }
 
 .drag-handle {
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.bank-item:hover .drag-handle {
+  opacity: 1;
 }
 
 .bank-name {
@@ -452,18 +458,28 @@ input[type="text"].input-error {
 
 .bank-delete {
   border: none;
-  background: #eef2f7;
+  background: transparent;
   color: var(--muted);
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 0.8rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 1.1rem;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.bank-item:hover .bank-delete {
+  opacity: 1;
 }
 
 .bank-delete:hover {
-  background: #e1e7f0;
-  color: var(--text);
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* Buttons */
