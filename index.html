@@ -28,6 +28,18 @@
             </button>
           </form>
         </div>
+
+        <div class="sidebar-section import-section">
+          <div class="section-header">
+            <h2>Import</h2>
+          </div>
+          <div class="import-controls">
+            <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
+            <button id="importBtn" type="button" class="btn btn-sm">Import CSV/XLSX</button>
+            <p class="import-hint">Uses Level 0-3 columns from the first sheet.</p>
+            <p class="import-status" id="importStatus" aria-live="polite"></p>
+          </div>
+        </div>
         
         <div class="sidebar-section bank-section">
           <div class="section-header" id="bankToggle">
@@ -87,6 +99,7 @@
       </div>
     </main>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

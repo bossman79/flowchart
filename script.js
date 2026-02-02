@@ -29,6 +29,9 @@ const zoomIn = document.getElementById('zoomIn');
 const zoomOut = document.getElementById('zoomOut');
 const zoomReset = document.getElementById('zoomReset');
 const zoomLevel = document.getElementById('zoomLevel');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+const importStatus = document.getElementById('importStatus');
 
 const DEFAULTS = ['CEO', 'Engineering', 'Design', 'Marketing', 'Sales'];
 
@@ -219,6 +222,23 @@ function renderNode(node, container, depth) {
     if (selectedId === node.id) selectedId = null;
     render();
   };
+  del.onmousedown = (e) => e.stopPropagation();
+
+  // Quick add child
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'tree-card-add';
+  addBtn.title = 'Add child node';
+  addBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>';
+  addBtn.onclick = (e) => {
+    e.stopPropagation();
+    addChildNode(node);
+  };
+  addBtn.onmousedown = (e) => e.stopPropagation();
+
+  const actions = document.createElement('div');
+  actions.className = 'tree-card-actions';
+  actions.append(addBtn, del);
   
   // Card content wrapper (draggable for moving between cards)
   const content = document.createElement('div');
@@ -240,9 +260,8 @@ function renderNode(node, container, depth) {
   
   content.append(toggle, name);
   if (count) content.appendChild(count);
-  content.appendChild(del);
   
-  card.append(dragHandle, content);
+  card.append(dragHandle, content, actions);
   
   // Select on click
   card.onclick = () => {
@@ -269,6 +288,18 @@ function renderNode(node, container, depth) {
   }
   
   container.appendChild(wrapper);
+}
+
+function addChildNode(parentNode) {
+  const newNode = new TreeNode('New Node');
+  parentNode.collapsed = false;
+  parentNode.addChild(newNode, 0);
+  selectedId = newNode.id;
+  render();
+  requestAnimationFrame(() => {
+    const nameEl = document.querySelector(`.tree-card[data-node-id="${newNode.id}"] .tree-card-name`);
+    if (nameEl) startEditing(nameEl, newNode);
+  });
 }
 
 // Reposition drag (drag left edge to change hierarchy)
@@ -631,6 +662,226 @@ collapseBtn.onclick = () => {
   collapse(treeData);
   render();
 };
+
+// Import
+function setImportStatus(message, type = '') {
+  if (!importStatus) return;
+  importStatus.textContent = message;
+  importStatus.classList.remove('success', 'error');
+  if (type) importStatus.classList.add(type);
+}
+
+function sheetToRows(workbook) {
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet) return [];
+  const worksheet = workbook.Sheets[firstSheet];
+  return XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+}
+
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && next === '\n') i++;
+      row.push(field);
+      if (row.some(cell => String(cell).trim() !== '')) {
+        rows.push(row);
+      }
+      row = [];
+      field = '';
+      continue;
+    }
+
+    if (!inQuotes && char === ',') {
+      row.push(field);
+      field = '';
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field);
+  if (row.some(cell => String(cell).trim() !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+async function parseImportFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  if (ext === 'csv') {
+    const text = await file.text();
+    if (window.XLSX) {
+      const workbook = XLSX.read(text, { type: 'string' });
+      return sheetToRows(workbook);
+    }
+    return parseCsvRows(text);
+  }
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    if (!window.XLSX) {
+      throw new Error('XLSX parser not available.');
+    }
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: 'array' });
+    return sheetToRows(workbook);
+  }
+
+  throw new Error('Unsupported file type.');
+}
+
+function getLevelIndexes(headerRow) {
+  const indexes = [];
+  headerRow.forEach((header, idx) => {
+    const label = String(header || '').trim();
+    if (/^level\s*\d+/i.test(label)) {
+      indexes.push(idx);
+    }
+  });
+
+  if (indexes.length > 0) return indexes;
+
+  const fallback = [];
+  headerRow.forEach((header, idx) => {
+    const label = String(header || '').trim().toLowerCase();
+    if (!label || label === 'type') return;
+    fallback.push(idx);
+  });
+
+  if (fallback.length > 0) return fallback;
+
+  return [0, 1, 2, 3];
+}
+
+function buildTreeFromRows(rows) {
+  if (!rows.length) return [];
+
+  const headerRow = rows[0] || [];
+  const headerLabels = headerRow.map(cell => String(cell || '').trim());
+  const hasLevelHeaders = headerLabels.some(label => /^level\s*\d+/i.test(label));
+  const levelIndexes = getLevelIndexes(headerLabels);
+  const startRow = hasLevelHeaders ? 1 : 0;
+
+  const roots = [];
+  const current = new Array(levelIndexes.length).fill('');
+
+  const addPath = (path) => {
+    let list = roots;
+    let parent = null;
+    path.forEach(name => {
+      let node = list.find(n => n.name === name);
+      if (!node) {
+        node = new TreeNode(name);
+        if (parent) {
+          parent.addChild(node);
+        } else {
+          node.parent = null;
+          roots.push(node);
+        }
+      }
+      parent = node;
+      list = node.children;
+    });
+  };
+
+  for (let i = startRow; i < rows.length; i++) {
+    const row = rows[i] || [];
+    let rowHasValue = false;
+
+    levelIndexes.forEach((colIndex, levelIdx) => {
+      const value = String(row[colIndex] || '').trim();
+      if (value) {
+        rowHasValue = true;
+        current[levelIdx] = value;
+        for (let j = levelIdx + 1; j < current.length; j++) {
+          current[j] = '';
+        }
+      }
+    });
+
+    if (!rowHasValue) continue;
+
+    const path = [];
+    for (let j = 0; j < current.length; j++) {
+      if (!current[j]) break;
+      path.push(current[j]);
+    }
+
+    if (path.length) addPath(path);
+  }
+
+  return roots;
+}
+
+function countNodes(nodes) {
+  let count = 0;
+  nodes.forEach(node => {
+    count += 1;
+    if (node.children.length) count += countNodes(node.children);
+  });
+  return count;
+}
+
+if (importBtn && importFile) {
+  importBtn.onclick = () => importFile.click();
+  importFile.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const previousNodeId = nodeId;
+    setImportStatus(`Loading ${file.name}...`);
+
+    try {
+      const rows = await parseImportFile(file);
+      nodeId = 0;
+      const nextTree = buildTreeFromRows(rows);
+      if (!nextTree.length) {
+        setImportStatus('No nodes found in the import file.', 'error');
+        nodeId = previousNodeId;
+        importFile.value = '';
+        return;
+      }
+
+      if (!confirm('Replace the current tree with the imported hierarchy?')) {
+        setImportStatus('Import canceled.');
+        nodeId = previousNodeId;
+        importFile.value = '';
+        return;
+      }
+
+      treeData = nextTree;
+      selectedId = null;
+      render();
+
+      setImportStatus(`Imported ${countNodes(treeData)} nodes from ${file.name}.`, 'success');
+    } catch (err) {
+      nodeId = previousNodeId;
+      setImportStatus(err.message || 'Import failed.', 'error');
+    } finally {
+      importFile.value = '';
+    }
+  };
+}
 
 // Zoom
 function updateZoom() {
