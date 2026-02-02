@@ -1046,9 +1046,8 @@ if (exportBtn) {
     const lines = [headers.map(csvEscape).join(',')];
     rows.forEach(row => {
       const line = new Array(exportDepth + 1).fill('');
-      row.path.forEach((value, idx) => {
-        if (idx <= exportDepth) line[idx] = value;
-      });
+      const depthIndex = Math.min(row.depth, exportDepth);
+      line[depthIndex] = row.path[row.path.length - 1] || '';
       line.push('', '', '');
       lines.push(line.map(csvEscape).join(','));
     });
