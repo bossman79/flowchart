@@ -1,59 +1,55 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tree Builder</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <div class="app">
-      <aside class="sidebar">
-        <div class="sidebar-header">
-          <h1>Tree Builder</h1>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tree Builder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Tree Builder</h1>
+      </div>
+      
+      <div class="sidebar-section">
+        <h2>Create Node</h2>
+        <form id="createForm" class="create-form" autocomplete="off">
+          <input id="nodeName" type="text" placeholder="Node name..." maxlength="40" required>
+          <button type="submit" class="btn btn-primary">Add</button>
+        </form>
+      </div>
+      
+      <div class="sidebar-section">
+        <h2>Node Bank</h2>
+        <div class="bank-list" id="bankList"></div>
+      </div>
+      
+      <div class="sidebar-section">
+        <h2>Actions</h2>
+        <div class="action-stack">
+          <button id="expandBtn" class="btn btn-secondary btn-block">Expand All</button>
+          <button id="collapseBtn" class="btn btn-secondary btn-block">Collapse All</button>
+          <button id="clearBtn" class="btn btn-secondary btn-block">Clear Tree</button>
         </div>
-        
-        <div class="sidebar-section">
-          <h2>Add Node</h2>
-          <form id="createForm" class="create-form" autocomplete="off">
-            <input id="nodeName" type="text" maxlength="40" placeholder="Enter node name..." required />
-            <button class="btn-primary" type="submit">Add</button>
-          </form>
-        </div>
-
-        <div class="sidebar-section">
-          <h2>Node Bank</h2>
-          <p class="hint">Drag onto the tree or onto a node to add as child</p>
-          <div class="bank-list" id="bankList"></div>
-        </div>
-
-        <div class="sidebar-section">
-          <h2>Actions</h2>
-          <div class="action-buttons">
-            <button id="expandAll" class="btn-secondary">Expand All</button>
-            <button id="collapseAll" class="btn-secondary">Collapse All</button>
-            <button id="clearCanvas" class="btn-danger">Clear Tree</button>
+      </div>
+    </aside>
+    
+    <main class="main-area">
+      <div class="tree-canvas" id="canvas">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
           </div>
+          <p>Drag nodes from the bank to build your tree</p>
         </div>
-      </aside>
-
-      <main class="main-area">
-        <div id="canvas" class="canvas" role="tree">
-          <div class="canvas-empty" id="canvasEmpty">
-            <div class="empty-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-            </div>
-            <p>Drag nodes here to start building your tree</p>
-          </div>
-          <div class="tree-container" id="treeContainer"></div>
-        </div>
-      </main>
-    </div>
-    <script src="script.js"></script>
-  </body>
+        <div class="tree-list" id="treeList"></div>
+      </div>
+    </main>
+  </div>
+  <script src="script.js"></script>
+</body>
 </html>
