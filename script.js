@@ -252,9 +252,36 @@ function renderNode(node, container, depth) {
   };
   addBtn.onmousedown = (e) => e.stopPropagation();
 
+  const moveUp = document.createElement('button');
+  moveUp.type = 'button';
+  moveUp.className = 'tree-card-move';
+  moveUp.title = 'Move up';
+  moveUp.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 15l6-6 6 6"/></svg>';
+  moveUp.onclick = (e) => {
+    e.stopPropagation();
+    moveNode(node, -1);
+  };
+  moveUp.onmousedown = (e) => e.stopPropagation();
+
+  const moveDown = document.createElement('button');
+  moveDown.type = 'button';
+  moveDown.className = 'tree-card-move';
+  moveDown.title = 'Move down';
+  moveDown.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+  moveDown.onclick = (e) => {
+    e.stopPropagation();
+    moveNode(node, 1);
+  };
+  moveDown.onmousedown = (e) => e.stopPropagation();
+
+  const siblings = getSiblings(node);
+  const idx = siblings.indexOf(node);
+  moveUp.disabled = idx <= 0;
+  moveDown.disabled = idx === siblings.length - 1;
+
   const actions = document.createElement('div');
   actions.className = 'tree-card-actions';
-  actions.append(addBtn, del);
+  actions.append(moveUp, moveDown, addBtn, del);
   
   // Card content wrapper (draggable for moving between cards)
   const content = document.createElement('div');
@@ -316,6 +343,17 @@ function addChildNode(parentNode) {
     const nameEl = document.querySelector(`.tree-card[data-node-id="${newNode.id}"] .tree-card-name`);
     if (nameEl) startEditing(nameEl, newNode);
   });
+}
+
+function moveNode(node, direction) {
+  const siblings = getSiblings(node);
+  const idx = siblings.indexOf(node);
+  if (idx === -1) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= siblings.length) return;
+  siblings.splice(idx, 1);
+  siblings.splice(targetIdx, 0, node);
+  render();
 }
 
 // Reposition drag (drag left edge to change hierarchy)
@@ -947,24 +985,24 @@ function buildExportRows(nodes, path = [], rows = []) {
   return rows;
 }
 
-function hexToArgb(hex) {
-  const clean = hex.replace('#', '');
-  const full = clean.length === 3
-    ? clean.split('').map(ch => ch + ch).join('')
-    : clean;
-  return `FF${full.toUpperCase()}`;
+function csvEscape(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }
 
-function lightenColor(hex, ratio = 0.65) {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  const nr = Math.round(r + (255 - r) * ratio);
-  const ng = Math.round(g + (255 - g) * ratio);
-  const nb = Math.round(b + (255 - b) * ratio);
-  const toHex = (value) => value.toString(16).padStart(2, '0');
-  return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`;
+function downloadCsv(filename, content) {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 if (exportBtn) {
@@ -974,65 +1012,22 @@ if (exportBtn) {
       return;
     }
 
-    if (!window.XLSX || !XLSX.utils || !XLSX.writeFile) {
-      setImportStatus('Export needs the XLSX library to load.', 'error');
-      return;
-    }
-
-    setImportStatus('Preparing Excel export...');
-
     const maxDepth = getMaxDepth(treeData, 0);
     const rows = buildExportRows(treeData);
     const headers = Array.from({ length: maxDepth + 1 }, (_, idx) => `Level ${idx}`);
 
-    const data = [headers];
+    const lines = [headers.map(csvEscape).join(',')];
     rows.forEach(row => {
       const line = new Array(maxDepth + 1).fill('');
       row.path.forEach((value, idx) => {
         line[idx] = value;
       });
-      data.push(line);
+      lines.push(line.map(csvEscape).join(','));
     });
 
-    const worksheet = XLSX.utils.aoa_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Hierarchy');
-
-    const headerStyle = {
-      font: { bold: true, color: { rgb: 'FFFFFFFF' } },
-      fill: { fgColor: { rgb: 'FF2A3F6B' } },
-      alignment: { vertical: 'center' }
-    };
-    const levelStyles = LEVEL_COLORS.map(color => ({
-      font: { color: { rgb: 'FF0B152B' } },
-      fill: { fgColor: { rgb: hexToArgb(lightenColor(color, 0.45)) } },
-      alignment: { vertical: 'center' }
-    }));
-
-    for (let c = 0; c <= maxDepth; c++) {
-      const cellRef = XLSX.utils.encode_cell({ r: 0, c });
-      if (worksheet[cellRef]) worksheet[cellRef].s = headerStyle;
-    }
-
-    for (let r = 1; r < data.length; r++) {
-      for (let c = 0; c <= maxDepth; c++) {
-        const cellRef = XLSX.utils.encode_cell({ r, c });
-        const cell = worksheet[cellRef];
-        if (cell && cell.v !== undefined && cell.v !== '') {
-          cell.s = levelStyles[Math.min(c, levelStyles.length - 1)];
-        }
-      }
-    }
-
-    worksheet['!cols'] = Array.from({ length: maxDepth + 1 }, () => ({ wch: 28 }));
-
     const dateStamp = new Date().toISOString().slice(0, 10);
-    try {
-      XLSX.writeFile(workbook, `tree-export-${dateStamp}.xlsx`, { compression: true });
-      setImportStatus(`Exported ${rows.length} rows to Excel.`, 'success');
-    } catch (err) {
-      setImportStatus('Export failed. Please try again.', 'error');
-    }
+    downloadCsv(`tree-export-${dateStamp}.csv`, lines.join('\n'));
+    setImportStatus(`Exported ${rows.length} rows to CSV.`, 'success');
   };
 }
 

@@ -794,6 +794,37 @@ body.level-coloring .tree-card.depth-6 {
   box-shadow: 0 0 0 2px rgba(123, 176, 255, 0.3);
 }
 
+.tree-card-move {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid rgba(150, 168, 199, 0.35);
+  background: rgba(150, 168, 199, 0.15);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.tree-card-move:hover {
+  background: rgba(150, 168, 199, 0.3);
+  border-color: rgba(150, 168, 199, 0.6);
+  transform: translateY(-1px);
+}
+
+.tree-card-move:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(150, 168, 199, 0.3);
+}
+
+.tree-card-move:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Tree Children */
 .tree-children {
   position: relative;
