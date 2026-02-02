@@ -5,32 +5,36 @@
 }
 
 :root {
-  --bg: #f5f5f5;
-  --sidebar-bg: #fff;
-  --card-bg: #fff;
-  --border: #ddd;
-  --text: #111;
-  --text-muted: #666;
-  --text-light: #999;
-  --accent: #2563eb;
-  --accent-light: #dbeafe;
-  --success: #16a34a;
-  --success-light: #dcfce7;
-  --danger: #dc2626;
-  --danger-light: #fee2e2;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow: 0 2px 6px rgba(0,0,0,0.08);
-  --radius: 6px;
-  --sidebar-width: 240px;
+  --bg: #0b0f16;
+  --sidebar-bg: #0f172a;
+  --card-bg: #111c2f;
+  --surface: #162237;
+  --surface-hover: #1c2a44;
+  --border: #22304a;
+  --text: #e2e8f0;
+  --text-muted: #a6b0c3;
+  --text-light: #6e7c92;
+  --accent: #60a5fa;
+  --accent-light: rgba(96, 165, 250, 0.18);
+  --success: #34d399;
+  --success-light: rgba(52, 211, 153, 0.18);
+  --danger: #f87171;
+  --danger-light: rgba(248, 113, 113, 0.18);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.45);
+  --shadow: 0 14px 28px rgba(0,0,0,0.35);
+  --radius: 10px;
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 56px;
   --indent: 28px;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   font-size: 14px;
+  letter-spacing: 0.01em;
 }
 
 .app {
@@ -47,43 +51,51 @@ body {
   flex-direction: column;
   flex-shrink: 0;
   position: relative;
-  transition: width 0.2s ease;
+  transition: width 0.2s ease, box-shadow 0.2s ease;
   z-index: 100;
+  box-shadow: 4px 0 18px rgba(0,0,0,0.25);
 }
 
 .sidebar.collapsed {
-  width: 0;
-  overflow: hidden;
+  width: var(--sidebar-collapsed-width);
 }
 
 .sidebar.collapsed .sidebar-content {
   opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px);
 }
 
 .sidebar-toggle {
   position: absolute;
-  right: -12px;
-  top: 16px;
-  width: 24px;
-  height: 24px;
-  background: var(--sidebar-bg);
+  right: 12px;
+  top: 14px;
+  width: 30px;
+  height: 30px;
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 10;
   color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .sidebar-toggle:hover {
-  background: var(--bg);
+  background: var(--surface-hover);
   color: var(--text);
 }
 
+.sidebar-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.35);
+}
+
 .sidebar.collapsed .sidebar-toggle {
-  right: -32px;
   transform: rotate(180deg);
 }
 
@@ -92,21 +104,21 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  transition: opacity 0.15s;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .sidebar-header {
-  padding: 16px;
+  padding: 18px 52px 16px 20px;
   border-bottom: 1px solid var(--border);
 }
 
 .sidebar-header h1 {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
 }
 
 .sidebar-section {
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -118,15 +130,24 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  cursor: pointer;
+  cursor: default;
   margin-bottom: 10px;
 }
 
+#bankToggle {
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+#bankToggle:hover .chevron {
+  color: var(--text);
+}
+
 .section-header h2 {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 
@@ -147,8 +168,8 @@ body {
 
 .create-form input {
   flex: 1;
-  padding: 8px 10px;
-  background: var(--bg);
+  padding: 9px 12px;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-size: 13px;
@@ -158,12 +179,17 @@ body {
 .create-form input:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
+}
+
+.create-form input::placeholder {
+  color: var(--text-light);
 }
 
 /* Buttons */
 .btn {
   padding: 8px 12px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -172,25 +198,27 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .btn:hover {
-  background: #e8e8e8;
+  background: var(--surface-hover);
+  border-color: #2f3f5f;
 }
 
 .btn-sm {
-  padding: 5px 8px;
+  padding: 6px 9px;
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+  color: #0b1220;
+  border-color: transparent;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
+  background: #3b82f6;
 }
 
 .btn-danger {
@@ -201,9 +229,14 @@ body {
   background: var(--danger-light);
 }
 
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
+}
+
 .action-row {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Bank */
@@ -222,7 +255,8 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  padding-bottom: 6px;
 }
 
 .bank-section.collapsed .bank-list {
@@ -232,15 +266,18 @@ body {
 .bank-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--bg);
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: grab;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .bank-item:hover {
-  background: #e5e5e5;
+  background: var(--surface-hover);
+  border-color: #2f3f5f;
 }
 
 .bank-item:active {
@@ -267,6 +304,7 @@ body {
   font-size: 16px;
   line-height: 1;
   opacity: 0;
+  transition: color 0.2s ease;
 }
 
 .bank-item:hover .bank-item-delete {
@@ -277,6 +315,11 @@ body {
   color: var(--danger);
 }
 
+.bank-item-delete:focus-visible {
+  outline: none;
+  color: var(--danger);
+}
+
 /* Main Area */
 .main-area {
   flex: 1;
@@ -284,10 +327,11 @@ body {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  background: var(--bg);
 }
 
 .toolbar {
-  padding: 10px 16px;
+  padding: 12px 18px;
   background: var(--sidebar-bg);
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -305,14 +349,15 @@ body {
 .zoom-level {
   font-size: 12px;
   color: var(--text-muted);
-  min-width: 40px;
+  min-width: 44px;
   text-align: center;
 }
 
 .canvas-scroll {
   flex: 1;
   overflow: auto;
-  padding: 20px;
+  padding: 22px;
+  background: radial-gradient(circle at top left, rgba(96, 165, 250, 0.08), transparent 40%), var(--bg);
 }
 
 .tree-canvas {
@@ -346,8 +391,8 @@ body {
 }
 
 .empty-icon {
-  width: 60px;
-  height: 60px;
+  width: 64px;
+  height: 64px;
   border: 2px dashed var(--border);
   border-radius: 12px;
   display: flex;
@@ -374,7 +419,7 @@ body {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin: 2px 0;
+  margin: 4px 0;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   transition: box-shadow 0.15s, border-color 0.15s, margin-left 0.1s;
@@ -386,7 +431,7 @@ body {
 
 .tree-card.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-light);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
 }
 
 .tree-card.dragging {
@@ -400,11 +445,11 @@ body {
 
 /* Left drag handle for repositioning */
 .tree-card-handle {
-  width: 16px;
+  width: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg);
+  background: var(--surface);
   border-right: 1px solid var(--border);
   cursor: ew-resize;
   color: var(--text-light);
@@ -422,7 +467,7 @@ body {
   flex: 1;
   display: flex;
   align-items: center;
-  padding: 8px 10px;
+  padding: 9px 12px;
   cursor: grab;
   min-width: 0;
 }
@@ -432,33 +477,41 @@ body {
 }
 
 .tree-card-toggle {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 6px;
   flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
 .tree-card-toggle:hover {
-  background: var(--bg);
+  background: var(--surface-hover);
   color: var(--text);
+  border-color: var(--border);
+}
+
+.tree-card-toggle:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
 .tree-card-toggle.leaf {
-  color: #ccc;
+  color: var(--text-light);
   cursor: default;
 }
 
 .tree-card-toggle.leaf:hover {
   background: none;
-  color: #ccc;
+  color: var(--text-light);
 }
 
 .tree-card-name {
@@ -466,19 +519,19 @@ body {
   font-weight: 500;
   cursor: text;
   padding: 2px 4px;
-  border-radius: 3px;
+  border-radius: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 240px;
 }
 
 .tree-card-name:hover {
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .tree-card-name.editing {
-  background: #fff;
+  background: var(--surface);
   outline: 2px solid var(--accent);
   white-space: normal;
   overflow: visible;
@@ -488,27 +541,28 @@ body {
 .tree-card-count {
   font-size: 11px;
   color: var(--text-muted);
-  background: var(--bg);
-  padding: 1px 6px;
-  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.12);
+  padding: 2px 8px;
+  border-radius: 999px;
   margin-left: 8px;
   flex-shrink: 0;
 }
 
 .tree-card-delete {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   background: none;
   border: none;
   color: var(--text-light);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-left: auto;
   padding-left: 8px;
   opacity: 0;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .tree-card:hover .tree-card-delete {
@@ -517,6 +571,13 @@ body {
 
 .tree-card-delete:hover {
   color: var(--danger);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.tree-card-delete:focus-visible {
+  outline: none;
+  color: var(--danger);
+  background: rgba(248, 113, 113, 0.12);
 }
 
 /* Tree Children */
@@ -546,7 +607,7 @@ body {
   height: 36px;
   background: var(--accent-light);
   border: 2px dashed var(--accent);
-  margin: 4px 0;
+  margin: 6px 0;
 }
 
 .drop-zone.active.as-child {
@@ -585,7 +646,7 @@ body {
 /* Root Drop Zone */
 .root-drop-zone {
   min-height: 50px;
-  margin-top: 16px;
+  margin-top: 18px;
   border: 2px dashed transparent;
   border-radius: var(--radius);
   transition: all 0.15s;
@@ -609,8 +670,8 @@ body {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -618,12 +679,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 3px;
+  background: #2b3852;
+  border-radius: 6px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aaa;
+  background: #3b4a6a;
 }
 
 /* Responsive */
@@ -634,15 +695,15 @@ body {
     top: 0;
     bottom: 0;
     z-index: 1000;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    box-shadow: 6px 0 24px rgba(0,0,0,0.35);
   }
   
   .sidebar.collapsed {
-    transform: translateX(-100%);
+    transform: translateX(calc(-100% + var(--sidebar-collapsed-width)));
     width: var(--sidebar-width);
   }
   
   .sidebar.collapsed .sidebar-toggle {
-    right: -36px;
+    right: 12px;
   }
 }
