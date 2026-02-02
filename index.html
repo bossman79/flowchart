@@ -3,79 +3,55 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hierarchy Tree Builder</title>
+    <title>Tree Builder</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="page">
-      <header class="topbar">
-        <div>
-          <h1>Hierarchy Tree Builder</h1>
-          <p>Drag nodes from the bank to build your tree. Indent to create children.</p>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h1>Tree Builder</h1>
         </div>
-        <div class="topbar-actions">
-          <button id="expandAll" class="ghost" type="button">Expand All</button>
-          <button id="collapseAll" class="ghost" type="button">Collapse All</button>
-          <button id="clearCanvas" class="ghost" type="button">Clear canvas</button>
-        </div>
-      </header>
-
-      <main class="layout">
-        <section class="canvas-panel">
-          <div class="panel-header">
-            <div>
-              <h2>Tree Canvas</h2>
-              <span class="panel-subtitle">
-                Drag to the left edge for siblings, indent to create children. Click arrows to collapse/expand.
-              </span>
-            </div>
-          </div>
-          <div
-            id="canvas"
-            class="canvas"
-            tabindex="0"
-            aria-label="Tree canvas drop zone"
-            role="tree"
-          >
-            <div class="canvas-placeholder">
-              <strong>Drop nodes here</strong>
-              <span>Create a hierarchy by dragging nodes from the bank.</span>
-            </div>
-          </div>
-          <div class="canvas-footer">
-            <span class="hint">Tip: Select a node and press Delete to remove it. Drag right to make a child, left to make a sibling.</span>
-          </div>
-        </section>
-
-        <aside class="dock">
-          <div class="dock-header">
-            <h2>Node Bank</h2>
-            <p>Create reusable nodes and drag them into your tree.</p>
-          </div>
+        
+        <div class="sidebar-section">
+          <h2>Add Node</h2>
           <form id="createForm" class="create-form" autocomplete="off">
-            <label class="form-label" for="nodeName">Node name</label>
-            <div class="input-row">
-              <input
-                id="nodeName"
-                type="text"
-                maxlength="40"
-                placeholder="e.g. VP Operations"
-                required
-              />
-              <button class="primary" type="submit">Add</button>
-            </div>
-            <div class="form-hint" id="formHint">
-              Names should be concise and descriptive.
-            </div>
+            <input id="nodeName" type="text" maxlength="40" placeholder="Enter node name..." required />
+            <button class="btn-primary" type="submit">Add</button>
           </form>
-          <div class="bank-list" id="bankList" aria-live="polite"></div>
-        </aside>
+        </div>
+
+        <div class="sidebar-section">
+          <h2>Node Bank</h2>
+          <p class="hint">Drag onto the tree or onto a node to add as child</p>
+          <div class="bank-list" id="bankList"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <h2>Actions</h2>
+          <div class="action-buttons">
+            <button id="expandAll" class="btn-secondary">Expand All</button>
+            <button id="collapseAll" class="btn-secondary">Collapse All</button>
+            <button id="clearCanvas" class="btn-danger">Clear Tree</button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <div id="canvas" class="canvas" role="tree">
+          <div class="canvas-empty" id="canvasEmpty">
+            <div class="empty-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </div>
+            <p>Drag nodes here to start building your tree</p>
+          </div>
+          <div class="tree-container" id="treeContainer"></div>
+        </div>
       </main>
     </div>
     <script src="script.js"></script>

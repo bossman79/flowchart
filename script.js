@@ -1,45 +1,36 @@
-// Tree data structure
+// State
 let treeData = [];
 let nodeIdCounter = 0;
-let draggedNode = null;
-let draggedElement = null;
-let dropIndicator = null;
-let dropTarget = null;
+let dragSource = null; // { type: 'bank' | 'tree', name?: string, node?: TreeNode }
+let selectedNodeId = null;
 
-const bankList = document.getElementById("bankList");
-const canvas = document.getElementById("canvas");
-const createForm = document.getElementById("createForm");
-const nodeNameInput = document.getElementById("nodeName");
-const formHint = document.getElementById("formHint");
-const clearCanvasButton = document.getElementById("clearCanvas");
-const canvasPlaceholder = canvas.querySelector(".canvas-placeholder");
+// DOM Elements
+const bankList = document.getElementById('bankList');
+const canvas = document.getElementById('canvas');
+const treeContainer = document.getElementById('treeContainer');
+const canvasEmpty = document.getElementById('canvasEmpty');
+const createForm = document.getElementById('createForm');
+const nodeNameInput = document.getElementById('nodeName');
+const clearBtn = document.getElementById('clearCanvas');
+const expandAllBtn = document.getElementById('expandAll');
+const collapseAllBtn = document.getElementById('collapseAll');
 
-const DEFAULT_BANK_ITEMS = [
-  "Chief Executive Officer",
-  "Operations",
-  "Sales",
-  "Engineering",
-  "Human Resources",
-];
+// Default items
+const DEFAULT_ITEMS = ['CEO', 'Engineering', 'Design', 'Marketing', 'Sales'];
 
-const NAME_HINT_DEFAULT = "Names should be concise and descriptive.";
-const NAME_HINT_ERROR = "Please enter a node name.";
-const INDENT_WIDTH = 32; // Pixels per indent level
-const CHILD_THRESHOLD = 24; // Drag threshold to become a child
-
-// Tree node class
+// Tree Node Class
 class TreeNode {
-  constructor(name, id = null) {
-    this.id = id !== null ? id : nodeIdCounter++;
+  constructor(name) {
+    this.id = nodeIdCounter++;
     this.name = name;
     this.children = [];
     this.collapsed = false;
     this.parent = null;
   }
 
-  addChild(node, index = null) {
+  addChild(node, index = -1) {
     node.parent = this;
-    if (index !== null && index >= 0 && index <= this.children.length) {
+    if (index >= 0 && index <= this.children.length) {
       this.children.splice(index, 0, node);
     } else {
       this.children.push(node);
@@ -47,637 +38,470 @@ class TreeNode {
   }
 
   removeChild(node) {
-    const index = this.children.indexOf(node);
-    if (index > -1) {
-      this.children.splice(index, 1);
+    const idx = this.children.indexOf(node);
+    if (idx > -1) {
+      this.children.splice(idx, 1);
       node.parent = null;
     }
   }
 
-  hasDescendant(node) {
-    if (this.children.includes(node)) return true;
-    return this.children.some(child => child.hasDescendant(node));
-  }
-
-  getDepth() {
-    let depth = 0;
+  isDescendantOf(node) {
     let current = this.parent;
     while (current) {
-      depth++;
+      if (current === node) return true;
       current = current.parent;
     }
-    return depth;
+    return false;
+  }
+
+  remove() {
+    if (this.parent) {
+      this.parent.removeChild(this);
+    } else {
+      const idx = treeData.indexOf(this);
+      if (idx > -1) treeData.splice(idx, 1);
+    }
   }
 }
 
-// Find node by ID in tree
-function findNodeById(id, nodes = treeData) {
+// Find node by ID
+function findNode(id, nodes = treeData) {
   for (const node of nodes) {
     if (node.id === id) return node;
-    const found = findNodeById(id, node.children);
+    const found = findNode(id, node.children);
     if (found) return found;
   }
   return null;
 }
 
-// Remove node from its current position
-function removeNodeFromTree(node) {
-  if (node.parent) {
-    node.parent.removeChild(node);
-  } else {
-    const index = treeData.indexOf(node);
-    if (index > -1) {
-      treeData.splice(index, 1);
+// Insert node at position
+function insertNode(node, targetNode, position) {
+  // Remove from current position
+  node.remove();
+  
+  if (position === 'child') {
+    targetNode.addChild(node, 0);
+    targetNode.collapsed = false;
+  } else if (position === 'before') {
+    const parent = targetNode.parent;
+    const siblings = parent ? parent.children : treeData;
+    const idx = siblings.indexOf(targetNode);
+    if (parent) {
+      parent.addChild(node, idx);
+    } else {
+      treeData.splice(idx, 0, node);
+      node.parent = null;
+    }
+  } else if (position === 'after') {
+    const parent = targetNode.parent;
+    const siblings = parent ? parent.children : treeData;
+    const idx = siblings.indexOf(targetNode);
+    if (parent) {
+      parent.addChild(node, idx + 1);
+    } else {
+      treeData.splice(idx + 1, 0, node);
       node.parent = null;
     }
   }
 }
 
-// Insert node as sibling (before or after another node)
-function insertAsSibling(node, targetNode, after = true) {
-  removeNodeFromTree(node);
-  
-  if (targetNode.parent) {
-    const siblings = targetNode.parent.children;
-    const targetIndex = siblings.indexOf(targetNode);
-    const insertIndex = after ? targetIndex + 1 : targetIndex;
-    targetNode.parent.addChild(node, insertIndex);
-  } else {
-    const targetIndex = treeData.indexOf(targetNode);
-    const insertIndex = after ? targetIndex + 1 : targetIndex;
-    treeData.splice(insertIndex, 0, node);
-    node.parent = null;
-  }
-}
-
-// Insert node as child of target
-function insertAsChild(node, targetNode, index = null) {
-  // Prevent circular references
-  if (node.hasDescendant(targetNode)) return false;
-  
-  removeNodeFromTree(node);
-  targetNode.addChild(node, index);
-  return true;
-}
-
-// Insert node at root level
-function insertAtRoot(node, index = null) {
-  removeNodeFromTree(node);
+// Add to root
+function addToRoot(node, index = -1) {
+  node.remove();
   node.parent = null;
-  if (index !== null && index >= 0 && index <= treeData.length) {
+  if (index >= 0) {
     treeData.splice(index, 0, node);
   } else {
     treeData.push(node);
   }
 }
 
-// Update placeholder visibility
-function updatePlaceholder() {
-  canvasPlaceholder.style.display = treeData.length === 0 ? "flex" : "none";
-}
-
-// Set input error state
-function setInputError(isError) {
-  nodeNameInput.classList.toggle("input-error", isError);
-  formHint.textContent = isError ? NAME_HINT_ERROR : NAME_HINT_DEFAULT;
-}
-
-// Create drop indicator element
-function createDropIndicator() {
-  const indicator = document.createElement("div");
-  indicator.className = "drop-indicator";
-  indicator.style.display = "none";
-  return indicator;
-}
-
-// Render the entire tree
-function renderTree() {
-  // Clear existing tree (keep placeholder)
-  const existingTree = canvas.querySelector(".tree-container");
-  if (existingTree) existingTree.remove();
+// Render
+function render() {
+  treeContainer.innerHTML = '';
+  canvasEmpty.classList.toggle('hidden', treeData.length > 0);
   
-  const existingSvg = canvas.querySelector(".tree-lines");
-  if (existingSvg) existingSvg.remove();
-
-  if (treeData.length === 0) {
-    updatePlaceholder();
-    return;
-  }
-
-  updatePlaceholder();
-
-  // Create tree container
-  const treeContainer = document.createElement("div");
-  treeContainer.className = "tree-container";
-
-  // Create SVG for lines
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.classList.add("tree-lines");
-  svg.style.position = "absolute";
-  svg.style.top = "0";
-  svg.style.left = "0";
-  svg.style.width = "100%";
-  svg.style.height = "100%";
-  svg.style.pointerEvents = "none";
-  svg.style.zIndex = "0";
-
-  // Render nodes recursively
-  function renderNode(node, depth = 0, isLastChild = true, parentLines = []) {
-    const nodeEl = document.createElement("div");
-    nodeEl.className = "tree-node";
-    nodeEl.dataset.nodeId = node.id;
-    nodeEl.dataset.depth = depth;
-    nodeEl.tabIndex = 0;
-    nodeEl.draggable = true;
-    nodeEl.setAttribute("role", "treeitem");
-    nodeEl.setAttribute("aria-label", node.name);
-    nodeEl.setAttribute("aria-expanded", !node.collapsed);
-
-    // Indent wrapper
-    const indentWrapper = document.createElement("div");
-    indentWrapper.className = "node-indent";
-    indentWrapper.style.width = `${depth * INDENT_WIDTH}px`;
-    indentWrapper.style.minWidth = `${depth * INDENT_WIDTH}px`;
-
-    // Line guides within indent
-    for (let i = 0; i < depth; i++) {
-      const guide = document.createElement("div");
-      guide.className = "indent-guide";
-      if (parentLines[i]) {
-        guide.classList.add("has-line");
-      }
-      guide.style.left = `${i * INDENT_WIDTH + INDENT_WIDTH / 2}px`;
-      indentWrapper.appendChild(guide);
-    }
-
-    // Toggle button for expandable nodes
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.className = "node-toggle";
-    
-    if (node.children.length > 0) {
-      toggleBtn.innerHTML = node.collapsed 
-        ? '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>'
-        : '<svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z"/></svg>';
-      toggleBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        node.collapsed = !node.collapsed;
-        renderTree();
-      });
-    } else {
-      toggleBtn.classList.add("no-children");
-      toggleBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16"><circle fill="currentColor" cx="12" cy="12" r="3"/></svg>';
-    }
-
-    // Node content
-    const content = document.createElement("div");
-    content.className = "node-content";
-
-    const title = document.createElement("span");
-    title.className = "node-title";
-    title.textContent = node.name;
-
-    const childCount = document.createElement("span");
-    childCount.className = "node-child-count";
-    if (node.children.length > 0) {
-      childCount.textContent = `(${node.children.length})`;
-    }
-
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "node-delete";
-    deleteBtn.innerHTML = "&times;";
-    deleteBtn.setAttribute("aria-label", `Delete ${node.name}`);
-    deleteBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      deleteNode(node);
-    });
-
-    content.append(title, childCount, deleteBtn);
-    nodeEl.append(indentWrapper, toggleBtn, content);
-
-    // Drag events
-    nodeEl.addEventListener("dragstart", handleDragStart);
-    nodeEl.addEventListener("dragend", handleDragEnd);
-    nodeEl.addEventListener("dragover", handleDragOver);
-    nodeEl.addEventListener("dragleave", handleDragLeave);
-    nodeEl.addEventListener("drop", handleDrop);
-
-    treeContainer.appendChild(nodeEl);
-
-    // Render children if not collapsed
-    if (!node.collapsed && node.children.length > 0) {
-      node.children.forEach((child, index) => {
-        const isLast = index === node.children.length - 1;
-        const newParentLines = [...parentLines, !isLast];
-        renderNode(child, depth + 1, isLast, newParentLines);
-      });
-    }
-  }
-
-  treeData.forEach((rootNode, index) => {
-    const isLast = index === treeData.length - 1;
-    renderNode(rootNode, 0, isLast, []);
+  if (treeData.length === 0) return;
+  
+  treeData.forEach((node, idx) => {
+    renderNode(node, treeContainer, 0, [], idx === treeData.length - 1);
   });
-
-  canvas.appendChild(treeContainer);
-  canvas.appendChild(svg);
-
-  // Draw connecting lines after DOM is updated
-  requestAnimationFrame(() => drawConnectingLines());
-}
-
-// Draw SVG connecting lines
-function drawConnectingLines() {
-  const svg = canvas.querySelector(".tree-lines");
-  if (!svg) return;
-
-  // Clear existing lines
-  svg.innerHTML = "";
-
-  const treeContainer = canvas.querySelector(".tree-container");
-  if (!treeContainer) return;
-
-  const containerRect = treeContainer.getBoundingClientRect();
-  const canvasRect = canvas.getBoundingClientRect();
-  const scrollTop = canvas.scrollTop;
-  const scrollLeft = canvas.scrollLeft;
-
-  // Process each node
-  function processNode(node) {
-    if (node.collapsed || node.children.length === 0) return;
-
-    const parentEl = treeContainer.querySelector(`[data-node-id="${node.id}"]`);
-    if (!parentEl) return;
-
-    const parentRect = parentEl.getBoundingClientRect();
-    const parentToggle = parentEl.querySelector(".node-toggle");
-    const toggleRect = parentToggle ? parentToggle.getBoundingClientRect() : parentRect;
-
-    // Start point (below parent's toggle)
-    const startX = toggleRect.left - canvasRect.left + toggleRect.width / 2 + scrollLeft;
-    const startY = parentRect.bottom - canvasRect.top + scrollTop;
-
-    node.children.forEach((child, index) => {
-      const childEl = treeContainer.querySelector(`[data-node-id="${child.id}"]`);
-      if (!childEl) return;
-
-      const childRect = childEl.getBoundingClientRect();
-      const childToggle = childEl.querySelector(".node-toggle");
-      const childToggleRect = childToggle ? childToggle.getBoundingClientRect() : childRect;
-
-      // End point (left of child's toggle)
-      const endX = childToggleRect.left - canvasRect.left + childToggleRect.width / 2 + scrollLeft;
-      const endY = childRect.top - canvasRect.top + childRect.height / 2 + scrollTop;
-
-      // Create path
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      
-      // L-shaped connector: vertical then horizontal
-      const cornerY = endY;
-      const d = `M ${startX} ${startY} L ${startX} ${cornerY} L ${endX} ${cornerY}`;
-      
-      path.setAttribute("d", d);
-      path.setAttribute("fill", "none");
-      path.setAttribute("stroke", "#c9d6ea");
-      path.setAttribute("stroke-width", "2");
-      path.setAttribute("stroke-linecap", "round");
-      path.setAttribute("stroke-linejoin", "round");
-
-      svg.appendChild(path);
-
-      // Process grandchildren
-      processNode(child);
-    });
-  }
-
-  treeData.forEach(rootNode => processNode(rootNode));
-}
-
-// Drag and drop handlers
-function handleDragStart(e) {
-  const nodeEl = e.currentTarget;
-  const nodeId = parseInt(nodeEl.dataset.nodeId);
-  draggedNode = findNodeById(nodeId);
-  draggedElement = nodeEl;
   
-  nodeEl.classList.add("dragging");
-  e.dataTransfer.effectAllowed = "move";
-  e.dataTransfer.setData("text/plain", nodeId.toString());
+  // Add root drop zone at the end
+  const rootDropZone = document.createElement('div');
+  rootDropZone.className = 'root-drop-zone';
+  rootDropZone.dataset.dropTarget = 'root';
+  treeContainer.appendChild(rootDropZone);
+}
 
-  // Create drop indicator
-  dropIndicator = createDropIndicator();
-  canvas.querySelector(".tree-container")?.appendChild(dropIndicator);
+function renderNode(node, container, depth, lineFlags, isLast) {
+  const nodeEl = document.createElement('div');
+  nodeEl.className = 'tree-node';
+  nodeEl.dataset.nodeId = node.id;
+  
+  const row = document.createElement('div');
+  row.className = 'tree-node-row';
+  row.draggable = true;
+  row.dataset.nodeId = node.id;
+  
+  if (selectedNodeId === node.id) {
+    row.classList.add('selected');
+  }
+  
+  // Indent
+  const indent = document.createElement('div');
+  indent.className = 'tree-node-indent';
+  
+  for (let i = 0; i < depth; i++) {
+    const unit = document.createElement('div');
+    unit.className = 'tree-indent-unit';
+    if (!lineFlags[i]) {
+      unit.classList.add('no-line');
+    }
+    indent.appendChild(unit);
+  }
+  
+  // Connector line
+  if (depth > 0) {
+    const connector = document.createElement('div');
+    connector.className = 'tree-node-connector';
+    row.appendChild(connector);
+  }
+  
+  // Toggle button
+  const toggle = document.createElement('button');
+  toggle.className = 'tree-node-toggle';
+  toggle.type = 'button';
+  
+  if (node.children.length > 0) {
+    toggle.innerHTML = node.collapsed
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>';
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      node.collapsed = !node.collapsed;
+      render();
+    });
+  } else {
+    toggle.classList.add('leaf');
+    toggle.innerHTML = '<svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="currentColor"/></svg>';
+  }
+  
+  // Content
+  const content = document.createElement('div');
+  content.className = 'tree-node-content';
+  
+  const name = document.createElement('span');
+  name.className = 'tree-node-name';
+  name.textContent = node.name;
+  
+  content.appendChild(name);
+  
+  if (node.children.length > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'tree-node-badge';
+    badge.textContent = node.children.length;
+    content.appendChild(badge);
+  }
+  
+  // Delete button
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'tree-node-delete';
+  deleteBtn.type = 'button';
+  deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    node.remove();
+    if (selectedNodeId === node.id) selectedNodeId = null;
+    render();
+  });
+  
+  content.appendChild(deleteBtn);
+  
+  row.append(indent, toggle, content);
+  nodeEl.appendChild(row);
+  
+  // Row events
+  row.addEventListener('click', () => {
+    selectedNodeId = node.id;
+    render();
+  });
+  
+  row.addEventListener('dragstart', handleDragStart);
+  row.addEventListener('dragend', handleDragEnd);
+  row.addEventListener('dragover', handleDragOver);
+  row.addEventListener('dragleave', handleDragLeave);
+  row.addEventListener('drop', handleDrop);
+  
+  // Children
+  if (node.children.length > 0) {
+    const childrenContainer = document.createElement('div');
+    childrenContainer.className = 'tree-node-children';
+    if (node.collapsed) {
+      childrenContainer.classList.add('collapsed');
+    }
+    
+    node.children.forEach((child, idx) => {
+      const newLineFlags = [...lineFlags, !isLast];
+      renderNode(child, childrenContainer, depth + 1, newLineFlags, idx === node.children.length - 1);
+    });
+    
+    nodeEl.appendChild(childrenContainer);
+  }
+  
+  container.appendChild(nodeEl);
+}
+
+// Drag & Drop Handlers
+function handleDragStart(e) {
+  const nodeId = parseInt(e.currentTarget.dataset.nodeId);
+  const node = findNode(nodeId);
+  if (!node) return;
+  
+  dragSource = { type: 'tree', node };
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', 'tree-node');
 }
 
 function handleDragEnd(e) {
-  if (draggedElement) {
-    draggedElement.classList.remove("dragging");
-  }
-  
-  // Remove all drag-over states
-  canvas.querySelectorAll(".tree-node").forEach(el => {
-    el.classList.remove("drag-over", "drag-over-child", "drag-over-sibling");
-  });
-  
-  if (dropIndicator) {
-    dropIndicator.remove();
-    dropIndicator = null;
-  }
-  
-  draggedNode = null;
-  draggedElement = null;
-  dropTarget = null;
+  e.currentTarget.classList.remove('dragging');
+  clearDropTargets();
+  dragSource = null;
 }
 
 function handleDragOver(e) {
   e.preventDefault();
-  e.dataTransfer.dropEffect = "move";
-
-  const nodeEl = e.currentTarget;
-  const nodeId = parseInt(nodeEl.dataset.nodeId);
-  const targetNode = findNodeById(nodeId);
-
-  if (!draggedNode || !targetNode || draggedNode === targetNode) return;
-  if (draggedNode.hasDescendant(targetNode)) return;
-
-  const rect = nodeEl.getBoundingClientRect();
-  const mouseX = e.clientX - rect.left;
-  const mouseY = e.clientY - rect.top;
-  const nodeDepth = parseInt(nodeEl.dataset.depth);
-
-  // Clear previous states
-  canvas.querySelectorAll(".tree-node").forEach(el => {
-    el.classList.remove("drag-over", "drag-over-child", "drag-over-sibling");
-  });
-
-  // Determine drop position based on mouse position
-  const verticalThird = rect.height / 3;
-  const indentThreshold = CHILD_THRESHOLD;
-
-  // Calculate indent level based on mouse X position
-  const effectiveX = mouseX - (nodeDepth * INDENT_WIDTH);
-
-  if (mouseY < verticalThird) {
-    // Top third - insert as sibling before
-    nodeEl.classList.add("drag-over-sibling");
-    dropTarget = { type: "sibling-before", node: targetNode };
-    showDropIndicator(nodeEl, "before", nodeDepth);
-  } else if (mouseY > rect.height - verticalThird) {
-    // Bottom third
-    if (effectiveX > indentThreshold && !targetNode.collapsed) {
-      // Indent - insert as child
-      nodeEl.classList.add("drag-over-child");
-      dropTarget = { type: "child", node: targetNode };
-      showDropIndicator(nodeEl, "child", nodeDepth + 1);
-    } else {
-      // No indent - insert as sibling after
-      nodeEl.classList.add("drag-over-sibling");
-      dropTarget = { type: "sibling-after", node: targetNode };
-      showDropIndicator(nodeEl, "after", nodeDepth);
-    }
-  } else {
-    // Middle - insert as child
-    if (effectiveX > indentThreshold) {
-      nodeEl.classList.add("drag-over-child");
-      dropTarget = { type: "child", node: targetNode };
-      showDropIndicator(nodeEl, "child", nodeDepth + 1);
-    } else {
-      nodeEl.classList.add("drag-over-sibling");
-      dropTarget = { type: "sibling-after", node: targetNode };
-      showDropIndicator(nodeEl, "after", nodeDepth);
-    }
-  }
-}
-
-function showDropIndicator(nodeEl, position, depth) {
-  if (!dropIndicator) return;
-
-  const rect = nodeEl.getBoundingClientRect();
-  const containerRect = canvas.querySelector(".tree-container").getBoundingClientRect();
+  e.stopPropagation();
   
-  dropIndicator.style.display = "block";
-  dropIndicator.style.left = `${depth * INDENT_WIDTH + 40}px`;
-  dropIndicator.style.width = `calc(100% - ${depth * INDENT_WIDTH + 60}px)`;
-
-  if (position === "before") {
-    dropIndicator.style.top = `${rect.top - containerRect.top - 2}px`;
-  } else if (position === "after" || position === "child") {
-    dropIndicator.style.top = `${rect.bottom - containerRect.top - 2}px`;
+  if (!dragSource) return;
+  
+  const row = e.currentTarget;
+  const nodeId = parseInt(row.dataset.nodeId);
+  const targetNode = findNode(nodeId);
+  
+  if (!targetNode) return;
+  
+  // Can't drop on self or descendants
+  if (dragSource.type === 'tree') {
+    if (dragSource.node === targetNode) return;
+    if (targetNode.isDescendantOf(dragSource.node)) return;
   }
+  
+  clearDropTargets();
+  
+  const rect = row.getBoundingClientRect();
+  const y = e.clientY - rect.top;
+  const height = rect.height;
+  
+  // Determine drop position based on vertical position
+  if (y < height * 0.25) {
+    row.classList.add('drop-target-before');
+    row.dataset.dropPosition = 'before';
+  } else if (y > height * 0.75) {
+    row.classList.add('drop-target-after');
+    row.dataset.dropPosition = 'after';
+  } else {
+    row.classList.add('drop-target-child');
+    row.dataset.dropPosition = 'child';
+  }
+  
+  e.dataTransfer.dropEffect = 'move';
 }
 
 function handleDragLeave(e) {
-  const nodeEl = e.currentTarget;
-  if (!nodeEl.contains(e.relatedTarget)) {
-    nodeEl.classList.remove("drag-over", "drag-over-child", "drag-over-sibling");
+  const row = e.currentTarget;
+  if (!row.contains(e.relatedTarget)) {
+    row.classList.remove('drop-target-before', 'drop-target-after', 'drop-target-child');
+    delete row.dataset.dropPosition;
   }
 }
 
 function handleDrop(e) {
   e.preventDefault();
   e.stopPropagation();
-
-  if (!draggedNode || !dropTarget) return;
-
-  const { type, node: targetNode } = dropTarget;
-
-  switch (type) {
-    case "sibling-before":
-      insertAsSibling(draggedNode, targetNode, false);
-      break;
-    case "sibling-after":
-      insertAsSibling(draggedNode, targetNode, true);
-      break;
-    case "child":
-      insertAsChild(draggedNode, targetNode, 0);
-      // Auto-expand parent when adding child
-      targetNode.collapsed = false;
-      break;
-  }
-
-  renderTree();
-}
-
-// Handle drop on canvas (for root level)
-function handleCanvasDragOver(e) {
-  // Check if we're over a tree node - if so, let the node handle it
-  if (e.target.closest(".tree-node")) {
-    return;
+  
+  const row = e.currentTarget;
+  const nodeId = parseInt(row.dataset.nodeId);
+  const targetNode = findNode(nodeId);
+  const position = row.dataset.dropPosition;
+  
+  if (!targetNode || !position || !dragSource) return;
+  
+  let nodeToInsert;
+  
+  if (dragSource.type === 'bank') {
+    nodeToInsert = new TreeNode(dragSource.name);
+  } else {
+    // Can't drop on self or descendants
+    if (dragSource.node === targetNode) return;
+    if (targetNode.isDescendantOf(dragSource.node)) return;
+    nodeToInsert = dragSource.node;
   }
   
-  e.preventDefault();
-  e.dataTransfer.dropEffect = "copy";
-  canvas.classList.add("is-drop-target");
+  insertNode(nodeToInsert, targetNode, position);
+  clearDropTargets();
+  dragSource = null;
+  render();
 }
 
-function handleCanvasDragLeave(e) {
-  if (!canvas.contains(e.relatedTarget) || e.relatedTarget === null) {
-    canvas.classList.remove("is-drop-target");
-  }
+function clearDropTargets() {
+  document.querySelectorAll('.drop-target-before, .drop-target-after, .drop-target-child').forEach(el => {
+    el.classList.remove('drop-target-before', 'drop-target-after', 'drop-target-child');
+    delete el.dataset.dropPosition;
+  });
+  document.querySelectorAll('.root-drop-zone.active').forEach(el => {
+    el.classList.remove('active');
+  });
 }
 
-function handleCanvasDrop(e) {
-  // If dropping on a tree node, let the node handle it
-  if (e.target.closest(".tree-node")) {
-    return;
+// Canvas drop (for empty or root drop zone)
+canvas.addEventListener('dragover', (e) => {
+  if (!dragSource) return;
+  
+  const isOverNode = e.target.closest('.tree-node-row');
+  const rootZone = e.target.closest('.root-drop-zone');
+  
+  if (!isOverNode || rootZone) {
+    e.preventDefault();
+    clearDropTargets();
+    const zone = document.querySelector('.root-drop-zone');
+    if (zone) zone.classList.add('active');
+    canvas.classList.add('drag-over');
   }
+});
 
+canvas.addEventListener('dragleave', (e) => {
+  if (!canvas.contains(e.relatedTarget)) {
+    canvas.classList.remove('drag-over');
+    clearDropTargets();
+  }
+});
+
+canvas.addEventListener('drop', (e) => {
+  const isOverNode = e.target.closest('.tree-node-row');
+  if (isOverNode) return; // Let node handle it
+  
   e.preventDefault();
-  e.stopPropagation();
-  canvas.classList.remove("is-drop-target");
-
-  const data = e.dataTransfer.getData("text/plain").trim();
-  if (!data) return;
-
-  // Check if it's from the tree (draggedNode exists) or from the bank
-  if (draggedNode) {
-    // Moving existing node to root
-    insertAtRoot(draggedNode);
+  canvas.classList.remove('drag-over');
+  
+  if (!dragSource) return;
+  
+  let node;
+  if (dragSource.type === 'bank') {
+    node = new TreeNode(dragSource.name);
   } else {
-    // New node from bank - data is the name
-    const newNode = new TreeNode(data);
-    treeData.push(newNode);
+    node = dragSource.node;
   }
+  
+  addToRoot(node);
+  clearDropTargets();
+  dragSource = null;
+  render();
+});
 
-  renderTree();
-}
-
-// Delete a node and its children
-function deleteNode(node) {
-  removeNodeFromTree(node);
-  renderTree();
-}
-
-// Add item to the bank
-function addBankItem(name) {
-  const item = document.createElement("div");
-  item.className = "bank-item";
+// Bank Item Creation
+function createBankItem(name) {
+  const item = document.createElement('div');
+  item.className = 'bank-item';
   item.draggable = true;
-  item.dataset.name = name;
-
-  // Drag handle icon (grip lines)
-  const handle = document.createElement("span");
-  handle.className = "drag-handle";
-  handle.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="9" cy="18" r="2"/><circle cx="15" cy="18" r="2"/></svg>';
-
-  const label = document.createElement("span");
-  label.className = "bank-name";
-  label.textContent = name;
-
-  const removeButton = document.createElement("button");
-  removeButton.type = "button";
-  removeButton.className = "bank-delete";
-  removeButton.innerHTML = "&times;";
-  removeButton.setAttribute("aria-label", `Remove ${name}`);
-
-  removeButton.addEventListener("click", () => {
+  
+  const icon = document.createElement('span');
+  icon.className = 'bank-item-icon';
+  icon.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="6" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="12" cy="18" r="2"/></svg>';
+  
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'bank-item-name';
+  nameSpan.textContent = name;
+  
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'bank-item-delete';
+  deleteBtn.type = 'button';
+  deleteBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  deleteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     item.remove();
   });
-
-  item.addEventListener("dragstart", (event) => {
-    event.dataTransfer.effectAllowed = "copy";
-    event.dataTransfer.setData("text/plain", name);
-    item.classList.add("dragging");
+  
+  item.append(icon, nameSpan, deleteBtn);
+  
+  item.addEventListener('dragstart', (e) => {
+    dragSource = { type: 'bank', name };
+    item.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', 'bank-item');
   });
-
-  item.addEventListener("dragend", () => {
-    item.classList.remove("dragging");
+  
+  item.addEventListener('dragend', () => {
+    item.classList.remove('dragging');
+    dragSource = null;
   });
-
-  item.append(handle, label, removeButton);
+  
   bankList.appendChild(item);
 }
 
-// Expand all nodes
-function expandAll() {
-  function expand(nodes) {
-    nodes.forEach(node => {
-      node.collapsed = false;
-      expand(node.children);
-    });
-  }
-  expand(treeData);
-  renderTree();
-}
-
-// Collapse all nodes
-function collapseAll() {
-  function collapse(nodes) {
-    nodes.forEach(node => {
-      if (node.children.length > 0) {
-        node.collapsed = true;
-      }
-      collapse(node.children);
-    });
-  }
-  collapse(treeData);
-  renderTree();
-}
-
-// Event listeners
-createForm.addEventListener("submit", (event) => {
-  event.preventDefault();
+// Form submission
+createForm.addEventListener('submit', (e) => {
+  e.preventDefault();
   const name = nodeNameInput.value.trim();
-  if (!name) {
-    setInputError(true);
-    nodeNameInput.focus();
-    return;
-  }
-  addBankItem(name);
-  nodeNameInput.value = "";
-  setInputError(false);
+  if (!name) return;
+  createBankItem(name);
+  nodeNameInput.value = '';
   nodeNameInput.focus();
 });
 
-nodeNameInput.addEventListener("input", () => {
-  if (nodeNameInput.value.trim()) {
-    setInputError(false);
-  }
-});
-
-canvas.addEventListener("dragover", handleCanvasDragOver);
-canvas.addEventListener("dragleave", handleCanvasDragLeave);
-canvas.addEventListener("drop", handleCanvasDrop);
-
-clearCanvasButton.addEventListener("click", () => {
+// Action buttons
+clearBtn.addEventListener('click', () => {
   if (treeData.length === 0) return;
-  const shouldClear = window.confirm("Clear all nodes from the canvas?");
-  if (!shouldClear) return;
+  if (!confirm('Clear the entire tree?')) return;
   treeData = [];
-  renderTree();
+  selectedNodeId = null;
+  render();
 });
 
-// Handle keyboard delete
-document.addEventListener("keydown", (event) => {
-  const activeElement = document.activeElement;
-  if (activeElement && activeElement.classList.contains("tree-node")) {
-    if (event.key === "Delete" || event.key === "Backspace") {
-      event.preventDefault();
-      const nodeId = parseInt(activeElement.dataset.nodeId);
-      const node = findNodeById(nodeId);
-      if (node) deleteNode(node);
+expandAllBtn.addEventListener('click', () => {
+  function expand(nodes) {
+    nodes.forEach(n => {
+      n.collapsed = false;
+      expand(n.children);
+    });
+  }
+  expand(treeData);
+  render();
+});
+
+collapseAllBtn.addEventListener('click', () => {
+  function collapse(nodes) {
+    nodes.forEach(n => {
+      if (n.children.length > 0) n.collapsed = true;
+      collapse(n.children);
+    });
+  }
+  collapse(treeData);
+  render();
+});
+
+// Keyboard delete
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodeId !== null) {
+    const node = findNode(selectedNodeId);
+    if (node) {
+      node.remove();
+      selectedNodeId = null;
+      render();
     }
   }
 });
 
-// Redraw lines on scroll
-canvas.addEventListener("scroll", () => {
-  requestAnimationFrame(drawConnectingLines);
+// Click outside to deselect
+canvas.addEventListener('click', (e) => {
+  if (!e.target.closest('.tree-node-row')) {
+    selectedNodeId = null;
+    render();
+  }
 });
-
-// Redraw lines on window resize
-window.addEventListener("resize", () => {
-  requestAnimationFrame(drawConnectingLines);
-});
-
-// Expand/Collapse all buttons
-const expandAllButton = document.getElementById("expandAll");
-const collapseAllButton = document.getElementById("collapseAll");
-
-expandAllButton.addEventListener("click", expandAll);
-collapseAllButton.addEventListener("click", collapseAll);
 
 // Initialize
-DEFAULT_BANK_ITEMS.forEach((name) => addBankItem(name));
-updatePlaceholder();
+DEFAULT_ITEMS.forEach(name => createBankItem(name));
+render();
