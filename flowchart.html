@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flowchart Editor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="flowchart-page">
+  <div class="app flowchart-app">
+    <aside class="sidebar" id="flowSidebar">
+      <div class="sidebar-toggle" id="flowSidebarToggle">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </div>
+      <div class="sidebar-content">
+        <div class="sidebar-header">
+          <a class="sidebar-back" href="index.html"><- Back to landing</a>
+          <h1>Flowchart Studio</h1>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-header">
+            <h2>Create</h2>
+          </div>
+          <div class="action-row">
+            <button id="addNodeBtn" class="btn btn-sm btn-primary" type="button">Add Node</button>
+            <button id="addCalloutBtn" class="btn btn-sm" type="button">Add Callout</button>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-header">
+            <h2>Properties</h2>
+          </div>
+          <div class="properties-panel" id="propertiesPanel">
+            <p class="properties-muted">Select a node, connector, or callout to edit its details.</p>
+          </div>
+        </div>
+
+        <div class="sidebar-section import-section">
+          <div class="section-header">
+            <h2>Import / Export</h2>
+          </div>
+          <div class="import-controls">
+            <input id="flowImportFile" type="file" accept=".json">
+            <button id="flowImportBtn" type="button" class="btn btn-sm">Import JSON</button>
+            <button id="flowExportBtn" type="button" class="btn btn-sm">Export JSON</button>
+            <p class="import-hint">Exports everything: layout, colors, connections, and callouts.</p>
+            <p class="import-status" id="flowStatus" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-header">
+            <h2>Canvas</h2>
+          </div>
+          <div class="level-toggle">
+            <span>Grid overlay</span>
+            <label class="toggle-switch">
+              <input id="gridToggle" type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <div class="toolbar">
+        <div class="zoom-controls">
+          <button id="flowZoomOut" class="btn btn-sm" title="Zoom Out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M8 11h6"/></svg>
+          </button>
+          <span class="zoom-level" id="flowZoomLevel">100%</span>
+          <button id="flowZoomIn" class="btn btn-sm" title="Zoom In">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>
+          </button>
+          <button id="flowZoomReset" class="btn btn-sm" title="Reset Zoom">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="canvas-scroll" id="flowCanvasScroll">
+        <div class="flowchart-canvas grid-on" id="flowCanvas">
+          <div class="flowchart-stage" id="flowStage">
+            <svg class="flowchart-svg" id="flowSvg">
+              <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L9,3 L0,6 Z" fill="rgba(123, 176, 255, 0.9)"></path>
+                </marker>
+                <marker id="calloutArrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L9,3 L0,6 Z" fill="rgba(96, 220, 255, 0.9)"></path>
+                </marker>
+              </defs>
+              <g id="connectionLayer"></g>
+              <g id="calloutLayer"></g>
+              <path id="previewPath" class="flow-connection preview" marker-end="url(#arrowhead)" style="display:none;"></path>
+            </svg>
+            <div class="flowchart-layer" id="flowNodes"></div>
+            <div class="flowchart-layer" id="flowCallouts"></div>
+            <div class="flow-empty-state" id="flowEmptyState">
+              <div>
+                <p>Drop in a node to start your flow.</p>
+                <p>Drag connectors between points to link steps.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="flowchart.js"></script>
+</body>
+</html>
