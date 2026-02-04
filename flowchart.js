@@ -1,3 +1,5 @@
+'use strict';
+
 const state = {
   nodes: [],
   connections: [],
@@ -80,6 +82,7 @@ function clamp(value, min, max) {
 }
 
 function updateCanvasSize() {
+  if (!flowStage || !flowCanvas) return;
   flowStage.style.width = `${baseWidth}px`;
   flowStage.style.height = `${baseHeight}px`;
   flowCanvas.style.width = `${baseWidth * state.zoom}px`;
@@ -87,8 +90,12 @@ function updateCanvasSize() {
 }
 
 function updateZoom() {
+  if (!flowStage) return;
+  flowStage.style.transformOrigin = '0 0'; // important for correct pointer math
   flowStage.style.transform = `scale(${state.zoom})`;
-  flowZoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
+  if (flowZoomLevel) {
+    flowZoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
+  }
   updateCanvasSize();
 }
 
@@ -121,6 +128,7 @@ function getStagePoint(clientX, clientY) {
 }
 
 function getViewportCenter() {
+  if (!flowCanvasScroll) return { x: baseWidth / 2, y: baseHeight / 2 };
   const centerX = (flowCanvasScroll.scrollLeft + flowCanvasScroll.clientWidth / 2) / state.zoom;
   const centerY = (flowCanvasScroll.scrollTop + flowCanvasScroll.clientHeight / 2) / state.zoom;
   return { x: centerX, y: centerY };
@@ -128,7 +136,8 @@ function getViewportCenter() {
 
 function updateEmptyState() {
   if (!flowEmptyState) return;
-  flowEmptyState.style.display = state.nodes.length ? 'none' : 'flex';
+  const hasContent = state.nodes.length > 0 || state.callouts.length > 0;
+  flowEmptyState.style.display = hasContent ? 'none' : 'flex';
 }
 
 function normalizeColor(value, fallback) {
@@ -156,8 +165,8 @@ function ensureNodeElement(node) {
   el.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
     if (e.target.closest('.resize-handle') || e.target.closest('.connection-point')) return;
-    if (e.target.classList.contains('node-text')) return;
-    if (el.classList.contains('editing')) return;
+    if (el.classList.contains('editing')) return; // allow drag unless editing
+    e.preventDefault();
     setSelection({ type: 'node', id: node.id });
     startNodeDrag(node, e);
   });
@@ -198,7 +207,7 @@ function ensureNodeElement(node) {
 
   el.appendChild(text);
   nodeEls.set(node.id, el);
-  nodesLayer.appendChild(el);
+  if (nodesLayer) nodesLayer.appendChild(el);
   return el;
 }
 
@@ -401,7 +410,7 @@ function ensureConnectionElement(connection) {
     setSelection({ type: 'connection', id: connection.id });
   });
 
-  connectionLayer.appendChild(path);
+  if (connectionLayer) connectionLayer.appendChild(path);
   connectionEls.set(connection.id, path);
   return path;
 }
@@ -435,8 +444,10 @@ function startConnectionDrag(nodeId, point, event) {
   connectionDrag = {
     from: { nodeId, point }
   };
-  previewPath.style.display = 'block';
-  previewPath.setAttribute('marker-end', 'url(#arrowhead)');
+  if (previewPath) {
+    previewPath.style.display = 'block';
+    previewPath.setAttribute('marker-end', 'url(#arrowhead)');
+  }
   handleConnectionDrag(event);
   document.addEventListener('mousemove', handleConnectionDrag);
   document.addEventListener('mouseup', stopConnectionDrag);
@@ -445,7 +456,7 @@ function startConnectionDrag(nodeId, point, event) {
 function handleConnectionDrag(event) {
   if (!connectionDrag) return;
   const fromNode = findNode(connectionDrag.from.nodeId);
-  if (!fromNode) return;
+  if (!fromNode || !previewPath) return;
   const start = getConnectionPoint(fromNode, connectionDrag.from.point);
   const end = getStagePoint(event.clientX, event.clientY);
   const startDir = pointDirections[connectionDrag.from.point] || pointDirections.right;
@@ -465,7 +476,9 @@ function stopConnectionDrag(event) {
   }
 
   connectionDrag = null;
-  previewPath.style.display = 'none';
+  if (previewPath) {
+    previewPath.style.display = 'none';
+  }
   document.removeEventListener('mousemove', handleConnectionDrag);
   document.removeEventListener('mouseup', stopConnectionDrag);
 }
@@ -533,7 +546,7 @@ function ensureCalloutElement(callout) {
   });
 
   calloutEls.set(callout.id, el);
-  calloutsLayer.appendChild(el);
+  if (calloutsLayer) calloutsLayer.appendChild(el);
   return el;
 }
 
@@ -576,6 +589,7 @@ function createCallout(options = {}) {
   setSelection({ type: 'callout', id: callout.id });
   ensureCanvasBounds();
   renderCalloutArrows();
+  updateEmptyState();
   return callout;
 }
 
@@ -647,8 +661,10 @@ function stopCalloutDrag() {
 
 function startCalloutArrowDrag(callout, event) {
   calloutArrowDrag = { id: callout.id };
-  previewPath.style.display = 'block';
-  previewPath.setAttribute('marker-end', 'url(#calloutArrow)');
+  if (previewPath) {
+    previewPath.style.display = 'block';
+    previewPath.setAttribute('marker-end', 'url(#calloutArrow)');
+  }
   handleCalloutArrowDrag(event);
   document.addEventListener('mousemove', handleCalloutArrowDrag);
   document.addEventListener('mouseup', stopCalloutArrowDrag);
@@ -657,7 +673,7 @@ function startCalloutArrowDrag(callout, event) {
 function handleCalloutArrowDrag(event) {
   if (!calloutArrowDrag) return;
   const callout = findCallout(calloutArrowDrag.id);
-  if (!callout) return;
+  if (!callout || !previewPath) return;
   const start = getCalloutAnchor(callout);
   const end = getStagePoint(event.clientX, event.clientY);
   previewPath.setAttribute('d', buildCurve(start, end, { x: 1, y: 0 }, { x: 0, y: 0 }));
@@ -681,8 +697,10 @@ function stopCalloutArrowDrag(event) {
   }
 
   calloutArrowDrag = null;
-  previewPath.style.display = 'none';
-  previewPath.setAttribute('marker-end', 'url(#arrowhead)');
+  if (previewPath) {
+    previewPath.style.display = 'none';
+    previewPath.setAttribute('marker-end', 'url(#arrowhead)');
+  }
   renderCalloutArrows();
   document.removeEventListener('mousemove', handleCalloutArrowDrag);
   document.removeEventListener('mouseup', stopCalloutArrowDrag);
@@ -716,7 +734,7 @@ function ensureCalloutPath(callout) {
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.classList.add('callout-arrow');
   path.setAttribute('marker-end', 'url(#calloutArrow)');
-  calloutLayer.appendChild(path);
+  if (calloutLayer) calloutLayer.appendChild(path);
   calloutPathEls.set(callout.id, path);
   return path;
 }
@@ -819,16 +837,22 @@ function renderProperties() {
     const colorRow = createColorRow('Fill color', node.color, (value) => {
       node.color = value;
       updateNodeElement(node);
-    });
+    }, DEFAULT_NODE_COLOR);
 
-    const sizeRow = createSizeRow(node.width, node.height, MIN_NODE_WIDTH, MIN_NODE_HEIGHT, (w, h) => {
-      node.width = w;
-      node.height = h;
-      updateNodeElement(node);
-      renderConnections();
-      renderCalloutArrows();
-      ensureCanvasBounds();
-    });
+    const sizeRow = createSizeRow(
+      node.width,
+      node.height,
+      MIN_NODE_WIDTH,
+      MIN_NODE_HEIGHT,
+      (w, h) => {
+        node.width = w;
+        node.height = h;
+        updateNodeElement(node);
+        renderConnections();
+        renderCalloutArrows();
+        ensureCanvasBounds();
+      }
+    );
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn btn-sm btn-danger';
@@ -850,15 +874,21 @@ function renderProperties() {
     const colorRow = createColorRow('Fill color', callout.color, (value) => {
       callout.color = value;
       updateCalloutElement(callout);
-    });
+    }, DEFAULT_CALLOUT_COLOR);
 
-    const sizeRow = createSizeRow(callout.width, callout.height, MIN_CALLOUT_WIDTH, MIN_CALLOUT_HEIGHT, (w, h) => {
-      callout.width = w;
-      callout.height = h;
-      updateCalloutElement(callout);
-      renderCalloutArrows();
-      ensureCanvasBounds();
-    });
+    const sizeRow = createSizeRow(
+      callout.width,
+      callout.height,
+      MIN_CALLOUT_WIDTH,
+      MIN_CALLOUT_HEIGHT,
+      (w, h) => {
+        callout.width = w;
+        callout.height = h;
+        updateCalloutElement(callout);
+        renderCalloutArrows();
+        ensureCanvasBounds();
+      }
+    );
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn btn-sm btn-danger';
@@ -890,14 +920,14 @@ function renderProperties() {
   }
 }
 
-function createColorRow(labelText, value, onChange) {
+function createColorRow(labelText, value, onChange, fallback = DEFAULT_NODE_COLOR) {
   const row = document.createElement('div');
   row.className = 'properties-row';
   const label = document.createElement('label');
   label.textContent = labelText;
   const input = document.createElement('input');
   input.type = 'color';
-  input.value = normalizeColor(value, DEFAULT_NODE_COLOR);
+  input.value = normalizeColor(value, fallback);
   input.addEventListener('input', () => onChange(input.value));
   row.append(label, input);
   return row;
@@ -996,8 +1026,8 @@ function exportFlowchart() {
     baseSize: { width: baseWidth, height: baseHeight },
     zoom: state.zoom,
     scroll: {
-      left: flowCanvasScroll.scrollLeft,
-      top: flowCanvasScroll.scrollTop
+      left: flowCanvasScroll ? flowCanvasScroll.scrollLeft : 0,
+      top: flowCanvasScroll ? flowCanvasScroll.scrollTop : 0
     },
     nodes: state.nodes,
     connections: state.connections,
@@ -1079,7 +1109,7 @@ function importFlowchart(data) {
   updateZoom();
   renderAll();
 
-  if (data.scroll) {
+  if (data.scroll && flowCanvasScroll) {
     requestAnimationFrame(() => {
       flowCanvasScroll.scrollLeft = data.scroll.left || 0;
       flowCanvasScroll.scrollTop = data.scroll.top || 0;
@@ -1089,100 +1119,134 @@ function importFlowchart(data) {
   setStatus('Flowchart imported.', 'success');
 }
 
-flowSidebarToggle.addEventListener('click', () => {
-  flowSidebar.classList.toggle('collapsed');
-});
+/* -------------------- Event wiring -------------------- */
 
-addNodeBtn.addEventListener('click', () => {
-  createNode();
-});
+if (flowSidebarToggle && flowSidebar) {
+  flowSidebarToggle.addEventListener('click', () => {
+    flowSidebar.classList.toggle('collapsed');
+  });
+}
 
-addCalloutBtn.addEventListener('click', () => {
-  createCallout();
-});
+if (addNodeBtn) {
+  addNodeBtn.addEventListener('click', () => {
+    createNode();
+  });
+}
 
-gridToggle.addEventListener('change', () => {
+if (addCalloutBtn) {
+  addCalloutBtn.addEventListener('click', () => {
+    createCallout();
+  });
+}
+
+if (gridToggle && flowCanvas) {
+  gridToggle.addEventListener('change', () => {
+    flowCanvas.classList.toggle('grid-on', gridToggle.checked);
+  });
+  // initial sync
   flowCanvas.classList.toggle('grid-on', gridToggle.checked);
-});
+}
 
-flowZoomIn.addEventListener('click', () => {
-  state.zoom = clamp(state.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
-  updateZoom();
-});
+if (flowZoomIn) {
+  flowZoomIn.addEventListener('click', () => {
+    state.zoom = clamp(state.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
+    updateZoom();
+  });
+}
 
-flowZoomOut.addEventListener('click', () => {
-  state.zoom = clamp(state.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
-  updateZoom();
-});
+if (flowZoomOut) {
+  flowZoomOut.addEventListener('click', () => {
+    state.zoom = clamp(state.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
+    updateZoom();
+  });
+}
 
-flowZoomReset.addEventListener('click', () => {
-  state.zoom = 1;
-  updateZoom();
-});
+if (flowZoomReset) {
+  flowZoomReset.addEventListener('click', () => {
+    state.zoom = 1;
+    updateZoom();
+  });
+}
 
-flowExportBtn.addEventListener('click', () => {
-  if (!state.nodes.length && !state.callouts.length) {
-    setStatus('Nothing to export yet.', 'error');
-    return;
-  }
-  exportFlowchart();
-});
-
-flowImportBtn.addEventListener('click', () => {
-  flowImportFile.click();
-});
-
-flowImportFile.addEventListener('change', async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  setStatus(`Loading ${file.name}...`);
-  try {
-    const text = await file.text();
-    const data = JSON.parse(text);
-    if (!data || !data.nodes) {
-      throw new Error('Invalid flowchart file.');
+if (flowExportBtn) {
+  flowExportBtn.addEventListener('click', () => {
+    if (!state.nodes.length && !state.callouts.length) {
+      setStatus('Nothing to export yet.', 'error');
+      return;
     }
-    importFlowchart(data);
-  } catch (err) {
-    setStatus(err.message || 'Import failed.', 'error');
-  } finally {
-    flowImportFile.value = '';
-  }
-});
+    exportFlowchart();
+  });
+}
 
-flowStage.addEventListener('mousedown', (event) => {
-  if (
-    event.target === flowStage ||
-    event.target === flowCanvas ||
-    event.target === flowSvg ||
-    event.target === connectionLayer ||
-    event.target === calloutLayer
-  ) {
-    setSelection(null);
-  }
-});
+if (flowImportBtn && flowImportFile) {
+  flowImportBtn.addEventListener('click', () => {
+    flowImportFile.click();
+  });
+
+  flowImportFile.addEventListener('change', async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setStatus(`Loading ${file.name}...`);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || !data.nodes) {
+        throw new Error('Invalid flowchart file.');
+      }
+      importFlowchart(data);
+    } catch (err) {
+      setStatus(err.message || 'Import failed.', 'error');
+    } finally {
+      flowImportFile.value = '';
+    }
+  });
+}
+
+if (flowStage) {
+  flowStage.addEventListener('mousedown', (event) => {
+    if (
+      event.target === flowStage ||
+      event.target === flowCanvas ||
+      event.target === flowSvg ||
+      event.target === connectionLayer ||
+      event.target === calloutLayer
+    ) {
+      setSelection(null);
+    }
+  });
+}
 
 document.addEventListener('keydown', (event) => {
-  if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
+  const target = event.target;
+  if (!target) return;
+  if (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.isContentEditable
+  ) {
     return;
   }
   if (event.key === 'Delete' || event.key === 'Backspace') {
     removeSelected();
   }
-  if ((event.ctrlKey || event.metaKey) && event.key === '=') {
+  if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
     event.preventDefault();
-    flowZoomIn.click();
+    if (flowZoomIn) flowZoomIn.click();
   }
   if ((event.ctrlKey || event.metaKey) && event.key === '-') {
     event.preventDefault();
-    flowZoomOut.click();
+    if (flowZoomOut) flowZoomOut.click();
   }
   if ((event.ctrlKey || event.metaKey) && event.key === '0') {
     event.preventDefault();
-    flowZoomReset.click();
+    if (flowZoomReset) flowZoomReset.click();
   }
 });
 
+/* -------------------- Initial render -------------------- */
+
 updateZoom();
-flowCanvas.classList.toggle('grid-on', gridToggle.checked);
+if (gridToggle && flowCanvas) {
+  flowCanvas.classList.toggle('grid-on', gridToggle.checked);
+}
 renderAll();
