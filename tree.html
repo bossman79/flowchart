@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hierarchy Tree Builder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="tree-page">
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-toggle" id="sidebarToggle">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18l-6-6 6-6"/>
+        </svg>
+      </div>
+      
+      <div class="sidebar-content">
+        <div class="sidebar-header">
+          <a class="sidebar-back" href="index.html"><- Back to landing</a>
+          <h1>Hierarchy Tree</h1>
+        </div>
+        
+        <div class="sidebar-section">
+          <form id="createForm" class="create-form" autocomplete="off">
+            <input id="nodeName" type="text" placeholder="New node name..." maxlength="40" required>
+            <button type="submit" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </form>
+        </div>
+
+        <div class="sidebar-section import-section">
+          <div class="section-header">
+            <h2>Import / Export</h2>
+          </div>
+          <div class="import-controls">
+            <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
+            <button id="importBtn" type="button" class="btn btn-sm">Import CSV/XLSX</button>
+            <button id="exportBtn" type="button" class="btn btn-sm">Export CSV</button>
+            <p class="import-hint">Uses Level columns from the first sheet.</p>
+            <p class="import-status" id="importStatus" aria-live="polite"></p>
+          </div>
+        </div>
+        
+        <div class="sidebar-section bank-section">
+          <div class="section-header" id="bankToggle">
+            <h2>Node Bank</h2>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="bank-list" id="bankList"></div>
+        </div>
+        
+        <div class="sidebar-section">
+          <div class="section-header">
+            <h2>Actions</h2>
+          </div>
+          <div class="action-row">
+            <button id="expandBtn" class="btn btn-sm" title="Expand All">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <button id="collapseBtn" class="btn btn-sm" title="Collapse All">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <button id="clearBtn" class="btn btn-sm btn-danger" title="Clear Tree">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+    
+    <main class="main-area" id="mainArea">
+      <div class="toolbar">
+        <div class="zoom-controls">
+          <button id="zoomOut" class="btn btn-sm" title="Zoom Out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M8 11h6"/></svg>
+          </button>
+          <span class="zoom-level" id="zoomLevel">100%</span>
+          <button id="zoomIn" class="btn btn-sm" title="Zoom In">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>
+          </button>
+          <button id="zoomReset" class="btn btn-sm" title="Reset Zoom">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+          </button>
+          <div class="level-toggle" title="Toggle level tinting">
+            <span>Level color</span>
+            <label class="toggle-switch">
+              <input id="levelTintToggle" type="checkbox" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="canvas-scroll" id="canvasScroll">
+        <div class="tree-canvas" id="canvas">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </div>
+            <p>Drag nodes here to build your tree</p>
+          </div>
+          <div class="tree-list" id="treeList"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.full.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
