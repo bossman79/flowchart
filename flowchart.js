@@ -1,14 +1,13 @@
 'use strict';
 
 const state = {
-  nodes: [],
+  layers: [],
   connections: [],
-  callouts: [],
   selected: null,
-  nextNodeId: 1,
+  nextId: 1,
   nextConnectionId: 1,
-  nextCalloutId: 1,
-  zoom: 1
+  zoom: 1,
+  layerDrag: null
 };
 
 const ZOOM_MIN = 0.5;
@@ -16,24 +15,14 @@ const ZOOM_MAX = 1.6;
 const ZOOM_STEP = 0.1;
 const MIN_NODE_WIDTH = 150;
 const MIN_NODE_HEIGHT = 90;
-const MIN_CALLOUT_WIDTH = 180;
-const MIN_CALLOUT_HEIGHT = 100;
+const MIN_SHAPE_SIZE = 60;
+const MIN_TEXTBOX_WIDTH = 100;
+const MIN_TEXTBOX_HEIGHT = 40;
 const DEFAULT_NODE_COLOR = '#22304d';
-const DEFAULT_CALLOUT_COLOR = '#21355a';
+const DEFAULT_SHAPE_COLOR = '#2a3b60';
 
 let baseWidth = 2200;
 let baseHeight = 1400;
-
-const flowSidebar = document.getElementById('flowSidebar');
-const flowSidebarToggle = document.getElementById('flowSidebarToggle');
-const addNodeBtn = document.getElementById('addNodeBtn');
-const addCalloutBtn = document.getElementById('addCalloutBtn');
-const propertiesPanel = document.getElementById('propertiesPanel');
-const flowStatus = document.getElementById('flowStatus');
-const flowImportBtn = document.getElementById('flowImportBtn');
-const flowImportFile = document.getElementById('flowImportFile');
-const flowExportBtn = document.getElementById('flowExportBtn');
-const gridToggle = document.getElementById('gridToggle');
 
 const flowCanvasScroll = document.getElementById('flowCanvasScroll');
 const flowCanvas = document.getElementById('flowCanvas');
@@ -42,40 +31,43 @@ const flowSvg = document.getElementById('flowSvg');
 const connectionLayer = document.getElementById('connectionLayer');
 const calloutLayer = document.getElementById('calloutLayer');
 const previewPath = document.getElementById('previewPath');
-const nodesLayer = document.getElementById('flowNodes');
-const calloutsLayer = document.getElementById('flowCallouts');
+const elementsLayer = document.getElementById('elementsLayer');
 const flowEmptyState = document.getElementById('flowEmptyState');
-
-const flowZoomIn = document.getElementById('flowZoomIn');
-const flowZoomOut = document.getElementById('flowZoomOut');
-const flowZoomReset = document.getElementById('flowZoomReset');
 const flowZoomLevel = document.getElementById('flowZoomLevel');
+const propertiesPanel = document.getElementById('propertiesPanel');
+const layersList = document.getElementById('layersList');
+const flowImportFile = document.getElementById('flowImportFile');
 
-const nodeEls = new Map();
-const calloutEls = new Map();
+const elementEls = new Map();
 const connectionEls = new Map();
 const calloutPathEls = new Map();
 
 let dragState = null;
 let resizeState = null;
 let connectionDrag = null;
-let calloutDrag = null;
 let calloutArrowDrag = null;
 
-const validPoints = ['top', 'right', 'bottom', 'left'];
-const pointDirections = {
-  top: { x: 0, y: -1 },
-  right: { x: 1, y: 0 },
-  bottom: { x: 0, y: 1 },
-  left: { x: -1, y: 0 }
+const validPoints = ['top', 'top-right', 'right', 'bottom-right', 'bottom', 'bottom-left', 'left', 'top-left'];
+const pointPositions = {
+  'top': { x: 0.5, y: 0 },
+  'top-right': { x: 1, y: 0 },
+  'right': { x: 1, y: 0.5 },
+  'bottom-right': { x: 1, y: 1 },
+  'bottom': { x: 0.5, y: 1 },
+  'bottom-left': { x: 0, y: 1 },
+  'left': { x: 0, y: 0.5 },
+  'top-left': { x: 0, y: 0 }
 };
-
-function setStatus(message, type = '') {
-  if (!flowStatus) return;
-  flowStatus.textContent = message;
-  flowStatus.classList.remove('success', 'error');
-  if (type) flowStatus.classList.add(type);
-}
+const pointDirections = {
+  'top': { x: 0, y: -1 },
+  'top-right': { x: 0.7, y: -0.7 },
+  'right': { x: 1, y: 0 },
+  'bottom-right': { x: 0.7, y: 0.7 },
+  'bottom': { x: 0, y: 1 },
+  'bottom-left': { x: -0.7, y: 0.7 },
+  'left': { x: -1, y: 0 },
+  'top-left': { x: -0.7, y: -0.7 }
+};
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -91,7 +83,7 @@ function updateCanvasSize() {
 
 function updateZoom() {
   if (!flowStage) return;
-  flowStage.style.transformOrigin = '0 0'; // important for correct pointer math
+  flowStage.style.transformOrigin = '0 0';
   flowStage.style.transform = `scale(${state.zoom})`;
   if (flowZoomLevel) {
     flowZoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
@@ -103,14 +95,9 @@ function ensureCanvasBounds() {
   let maxX = 0;
   let maxY = 0;
 
-  state.nodes.forEach((node) => {
-    maxX = Math.max(maxX, node.x + node.width);
-    maxY = Math.max(maxY, node.y + node.height);
-  });
-
-  state.callouts.forEach((callout) => {
-    maxX = Math.max(maxX, callout.x + callout.width);
-    maxY = Math.max(maxY, callout.y + callout.height);
+  state.layers.forEach((layer) => {
+    maxX = Math.max(maxX, layer.x + layer.width);
+    maxY = Math.max(maxY, layer.y + layer.height);
   });
 
   const padding = 240;
@@ -136,7 +123,7 @@ function getViewportCenter() {
 
 function updateEmptyState() {
   if (!flowEmptyState) return;
-  const hasContent = state.nodes.length > 0 || state.callouts.length > 0;
+  const hasContent = state.layers.length > 0;
   flowEmptyState.style.display = hasContent ? 'none' : 'flex';
 }
 
@@ -147,111 +134,247 @@ function normalizeColor(value, fallback) {
   return fallback;
 }
 
-function ensureNodeElement(node) {
-  if (nodeEls.has(node.id)) return nodeEls.get(node.id);
+function createLayer(type, options = {}) {
+  const center = getViewportCenter();
+  const layer = {
+    id: state.nextId++,
+    type,
+    x: options.x ?? center.x - (options.width || 180) / 2,
+    y: options.y ?? center.y - (options.height || 110) / 2,
+    width: options.width || (type === 'textbox' ? 200 : type === 'shape' ? 120 : 180),
+    height: options.height || (type === 'textbox' ? 60 : type === 'shape' ? 120 : 110),
+    text: options.text || (type === 'node' ? 'New Step' : type === 'textbox' ? 'Text' : type === 'shape' ? '' : 'Note'),
+    color: options.color || (type === 'shape' ? DEFAULT_SHAPE_COLOR : DEFAULT_NODE_COLOR),
+    locked: false,
+    visible: true,
+    zIndex: state.layers.length
+  };
+
+  if (type === 'callout') {
+    layer.target = options.target || { x: center.x + 140, y: center.y };
+  }
+
+  state.layers.push(layer);
+  ensureElementNode(layer);
+  updateElementNode(layer);
+  setSelection({ type: 'layer', id: layer.id });
+  ensureCanvasBounds();
+  renderConnections();
+  renderCalloutArrows();
+  renderLayers();
+  updateEmptyState();
+  return layer;
+}
+
+function findLayer(id) {
+  return state.layers.find((l) => l.id === id);
+}
+
+function ensureElementNode(layer) {
+  if (elementEls.has(layer.id)) return elementEls.get(layer.id);
 
   const el = document.createElement('div');
-  el.className = 'flow-node';
-  el.dataset.nodeId = node.id;
+  el.className = `flow-element flow-${layer.type}`;
+  el.dataset.layerId = layer.id;
+  el.dataset.type = layer.type;
 
+  if (layer.type === 'node') {
+    setupNodeElement(el, layer);
+  } else if (layer.type === 'shape') {
+    setupShapeElement(el, layer);
+  } else if (layer.type === 'textbox') {
+    setupTextboxElement(el, layer);
+  } else if (layer.type === 'callout') {
+    setupCalloutElement(el, layer);
+  }
+
+  elementEls.set(layer.id, el);
+  if (elementsLayer) elementsLayer.appendChild(el);
+  return el;
+}
+
+function setupNodeElement(el, layer) {
   const text = document.createElement('div');
   text.className = 'node-text';
-  text.textContent = node.text;
+  text.textContent = layer.text;
   text.addEventListener('dblclick', (e) => {
     e.stopPropagation();
-    startNodeEditing(node, el, text);
+    if (layer.locked) return;
+    startTextEditing(layer, el, text);
   });
 
   el.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
+    if (layer.locked) return;
     if (e.target.closest('.resize-handle') || e.target.closest('.connection-point')) return;
-    if (el.classList.contains('editing')) return; // allow drag unless editing
+    if (el.classList.contains('editing')) return;
     e.preventDefault();
-    setSelection({ type: 'node', id: node.id });
-    startNodeDrag(node, e);
+    setSelection({ type: 'layer', id: layer.id });
+    startDrag(layer, e);
   });
 
   el.addEventListener('click', (e) => {
     e.stopPropagation();
-    setSelection({ type: 'node', id: node.id });
+    setSelection({ type: 'layer', id: layer.id });
   });
 
   validPoints.forEach((point) => {
     const pt = document.createElement('div');
     pt.className = `connection-point point-${point}`;
     pt.dataset.point = point;
-    pt.dataset.nodeId = node.id;
+    pt.dataset.layerId = layer.id;
     pt.addEventListener('mousedown', (e) => {
       e.stopPropagation();
-      startConnectionDrag(node.id, point, e);
+      if (layer.locked) return;
+      startConnectionDrag(layer.id, point, e);
     });
     el.appendChild(pt);
   });
 
-  const handles = [
-    { className: 'resize-handle handle-r', handle: 'r' },
-    { className: 'resize-handle handle-b', handle: 'b' },
-    { className: 'resize-handle handle-br', handle: 'br' }
-  ];
-
-  handles.forEach((config) => {
-    const handle = document.createElement('div');
-    handle.className = config.className;
-    handle.dataset.handle = config.handle;
-    handle.addEventListener('mousedown', (e) => {
-      e.stopPropagation();
-      startNodeResize(node, config.handle, e);
-    });
-    el.appendChild(handle);
+  const handle = document.createElement('div');
+  handle.className = 'resize-handle handle-br';
+  handle.dataset.handle = 'br';
+  handle.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    startResize(layer, 'br', e);
   });
+  el.appendChild(handle);
 
   el.appendChild(text);
-  nodeEls.set(node.id, el);
-  if (nodesLayer) nodesLayer.appendChild(el);
-  return el;
 }
 
-function updateNodeElement(node) {
-  const el = nodeEls.get(node.id);
-  if (!el) return;
-  el.style.left = `${node.x}px`;
-  el.style.top = `${node.y}px`;
-  el.style.width = `${node.width}px`;
-  el.style.height = `${node.height}px`;
-  el.style.setProperty('--node-color', node.color);
+function setupShapeElement(el, layer) {
+  el.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (layer.locked) return;
+    if (e.target.closest('.resize-handle')) return;
+    e.preventDefault();
+    setSelection({ type: 'layer', id: layer.id });
+    startDrag(layer, e);
+  });
 
-  const textEl = el.querySelector('.node-text');
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelection({ type: 'layer', id: layer.id });
+  });
+
+  const handle = document.createElement('div');
+  handle.className = 'resize-handle handle-br';
+  handle.dataset.handle = 'br';
+  handle.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    startResize(layer, 'br', e);
+  });
+  el.appendChild(handle);
+}
+
+function setupTextboxElement(el, layer) {
+  const text = document.createElement('div');
+  text.className = 'textbox-text';
+  text.textContent = layer.text;
+  text.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    startTextEditing(layer, el, text);
+  });
+
+  el.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (layer.locked) return;
+    if (e.target.closest('.resize-handle')) return;
+    if (el.classList.contains('editing')) return;
+    e.preventDefault();
+    setSelection({ type: 'layer', id: layer.id });
+    startDrag(layer, e);
+  });
+
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelection({ type: 'layer', id: layer.id });
+  });
+
+  const handle = document.createElement('div');
+  handle.className = 'resize-handle handle-br';
+  handle.dataset.handle = 'br';
+  handle.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    startResize(layer, 'br', e);
+  });
+  el.appendChild(handle);
+
+  el.appendChild(text);
+}
+
+function setupCalloutElement(el, layer) {
+  const header = document.createElement('div');
+  header.className = 'callout-header';
+  header.textContent = 'Callout';
+  header.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    setSelection({ type: 'layer', id: layer.id });
+    startDrag(layer, e);
+  });
+
+  const text = document.createElement('div');
+  text.className = 'callout-text';
+  text.textContent = layer.text;
+  text.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    startTextEditing(layer, el, text);
+  });
+
+  const anchor = document.createElement('div');
+  anchor.className = 'callout-anchor';
+  anchor.title = 'Drag to attach arrow';
+  anchor.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    if (layer.locked) return;
+    startCalloutArrowDrag(layer, e);
+  });
+
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setSelection({ type: 'layer', id: layer.id });
+  });
+
+  el.appendChild(header);
+  el.appendChild(text);
+  el.appendChild(anchor);
+}
+
+function updateElementNode(layer) {
+  const el = elementEls.get(layer.id);
+  if (!el) return;
+
+  el.style.left = `${layer.x}px`;
+  el.style.top = `${layer.y}px`;
+  el.style.width = `${layer.width}px`;
+  el.style.height = `${layer.height}px`;
+  el.style.zIndex = layer.zIndex;
+  el.style.display = layer.visible ? 'block' : 'none';
+
+  if (layer.type === 'node' || layer.type === 'shape') {
+    el.style.setProperty('--element-color', layer.color);
+  }
+
+  if (layer.locked) {
+    el.classList.add('locked');
+  } else {
+    el.classList.remove('locked');
+  }
+
+  const textEl = el.querySelector('.node-text, .textbox-text, .callout-text');
   if (textEl && !el.classList.contains('editing')) {
-    textEl.textContent = node.text;
+    textEl.textContent = layer.text;
   }
 }
 
-function createNode(options = {}) {
-  const center = getViewportCenter();
-  const width = options.width || 180;
-  const height = options.height || 110;
-  const node = {
-    id: state.nextNodeId++,
-    x: options.x ?? center.x - width / 2,
-    y: options.y ?? center.y - height / 2,
-    width,
-    height,
-    text: options.text || 'New Step',
-    color: options.color || DEFAULT_NODE_COLOR
-  };
-
-  state.nodes.push(node);
-  ensureNodeElement(node);
-  updateNodeElement(node);
-  setSelection({ type: 'node', id: node.id });
-  ensureCanvasBounds();
-  renderConnections();
-  renderCalloutArrows();
-  updateEmptyState();
-  return node;
-}
-
-function startNodeEditing(node, nodeEl, textEl) {
+function startTextEditing(layer, nodeEl, textEl) {
   nodeEl.classList.add('editing');
   textEl.contentEditable = 'true';
   textEl.classList.add('editable');
@@ -269,14 +392,15 @@ function startNodeEditing(node, nodeEl, textEl) {
     nodeEl.classList.remove('editing');
     const nextText = textEl.textContent.trim();
     if (!cancel && nextText) {
-      node.text = nextText;
+      layer.text = nextText;
     }
-    textEl.textContent = node.text;
+    textEl.textContent = layer.text;
+    renderLayers();
   };
 
   textEl.onblur = () => finish(false);
   textEl.onkeydown = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && layer.type !== 'textbox') {
       e.preventDefault();
       textEl.blur();
     }
@@ -288,100 +412,87 @@ function startNodeEditing(node, nodeEl, textEl) {
   };
 }
 
-function startNodeDrag(node, event) {
+function startDrag(layer, event) {
   const start = getStagePoint(event.clientX, event.clientY);
   dragState = {
-    id: node.id,
-    offsetX: start.x - node.x,
-    offsetY: start.y - node.y
+    id: layer.id,
+    offsetX: start.x - layer.x,
+    offsetY: start.y - layer.y
   };
-  const el = nodeEls.get(node.id);
+  const el = elementEls.get(layer.id);
   if (el) el.classList.add('dragging');
-  document.addEventListener('mousemove', handleNodeDrag);
-  document.addEventListener('mouseup', stopNodeDrag);
+  document.addEventListener('mousemove', handleDrag);
+  document.addEventListener('mouseup', stopDrag);
 }
 
-function handleNodeDrag(event) {
+function handleDrag(event) {
   if (!dragState) return;
-  const node = findNode(dragState.id);
-  if (!node) return;
+  const layer = findLayer(dragState.id);
+  if (!layer || layer.locked) return;
   const point = getStagePoint(event.clientX, event.clientY);
-  node.x = Math.max(0, point.x - dragState.offsetX);
-  node.y = Math.max(0, point.y - dragState.offsetY);
-  updateNodeElement(node);
+  layer.x = Math.max(0, point.x - dragState.offsetX);
+  layer.y = Math.max(0, point.y - dragState.offsetY);
+  updateElementNode(layer);
   renderConnections();
   renderCalloutArrows();
   ensureCanvasBounds();
 }
 
-function stopNodeDrag() {
+function stopDrag() {
   if (!dragState) return;
-  const el = nodeEls.get(dragState.id);
+  const el = elementEls.get(dragState.id);
   if (el) el.classList.remove('dragging');
   dragState = null;
-  document.removeEventListener('mousemove', handleNodeDrag);
-  document.removeEventListener('mouseup', stopNodeDrag);
+  document.removeEventListener('mousemove', handleDrag);
+  document.removeEventListener('mouseup', stopDrag);
 }
 
-function startNodeResize(node, handle, event) {
+function startResize(layer, handle, event) {
   const start = getStagePoint(event.clientX, event.clientY);
   resizeState = {
-    id: node.id,
+    id: layer.id,
     handle,
     startX: start.x,
     startY: start.y,
-    startWidth: node.width,
-    startHeight: node.height
+    startWidth: layer.width,
+    startHeight: layer.height
   };
-  document.addEventListener('mousemove', handleNodeResize);
-  document.addEventListener('mouseup', stopNodeResize);
+  document.addEventListener('mousemove', handleResize);
+  document.addEventListener('mouseup', stopResize);
 }
 
-function handleNodeResize(event) {
+function handleResize(event) {
   if (!resizeState) return;
-  const node = findNode(resizeState.id);
-  if (!node) return;
+  const layer = findLayer(resizeState.id);
+  if (!layer || layer.locked) return;
   const point = getStagePoint(event.clientX, event.clientY);
   const deltaX = point.x - resizeState.startX;
   const deltaY = point.y - resizeState.startY;
 
-  if (resizeState.handle === 'r' || resizeState.handle === 'br') {
-    node.width = clamp(resizeState.startWidth + deltaX, MIN_NODE_WIDTH, 900);
-  }
-  if (resizeState.handle === 'b' || resizeState.handle === 'br') {
-    node.height = clamp(resizeState.startHeight + deltaY, MIN_NODE_HEIGHT, 700);
-  }
+  const minSize = layer.type === 'shape' ? MIN_SHAPE_SIZE : layer.type === 'textbox' ? MIN_TEXTBOX_WIDTH : MIN_NODE_WIDTH;
+  const minHeight = layer.type === 'textbox' ? MIN_TEXTBOX_HEIGHT : layer.type === 'shape' ? MIN_SHAPE_SIZE : MIN_NODE_HEIGHT;
 
-  updateNodeElement(node);
+  layer.width = clamp(resizeState.startWidth + deltaX, minSize, 900);
+  layer.height = clamp(resizeState.startHeight + deltaY, minHeight, 700);
+
+  updateElementNode(layer);
   renderConnections();
   renderCalloutArrows();
   ensureCanvasBounds();
 }
 
-function stopNodeResize() {
+function stopResize() {
   resizeState = null;
-  document.removeEventListener('mousemove', handleNodeResize);
-  document.removeEventListener('mouseup', stopNodeResize);
+  document.removeEventListener('mousemove', handleResize);
+  document.removeEventListener('mouseup', stopResize);
 }
 
-function getConnectionPoint(node, point) {
-  const x = node.x;
-  const y = node.y;
-  const w = node.width;
-  const h = node.height;
-
-  switch (point) {
-    case 'top':
-      return { x: x + w / 2, y };
-    case 'right':
-      return { x: x + w, y: y + h / 2 };
-    case 'bottom':
-      return { x: x + w / 2, y: y + h };
-    case 'left':
-      return { x, y: y + h / 2 };
-    default:
-      return { x: x + w / 2, y: y + h / 2 };
-  }
+function getConnectionPoint(layer, point) {
+  const pos = pointPositions[point] || pointPositions.right;
+  return {
+    x: layer.x + layer.width * pos.x,
+    y: layer.y + layer.height * pos.y
+  };
 }
 
 function buildCurve(start, end, startDir, endDir) {
@@ -425,13 +536,13 @@ function renderConnections() {
   });
 
   state.connections.forEach((connection) => {
-    const fromNode = findNode(connection.from.nodeId);
-    const toNode = findNode(connection.to.nodeId);
-    if (!fromNode || !toNode) return;
+    const fromLayer = findLayer(connection.from.layerId);
+    const toLayer = findLayer(connection.to.layerId);
+    if (!fromLayer || !toLayer || fromLayer.type !== 'node' || toLayer.type !== 'node') return;
 
     const path = ensureConnectionElement(connection);
-    const start = getConnectionPoint(fromNode, connection.from.point);
-    const end = getConnectionPoint(toNode, connection.to.point);
+    const start = getConnectionPoint(fromLayer, connection.from.point);
+    const end = getConnectionPoint(toLayer, connection.to.point);
     const startDir = pointDirections[connection.from.point] || pointDirections.right;
     const endDir = pointDirections[connection.to.point] || pointDirections.left;
     path.setAttribute('d', buildCurve(start, end, startDir, endDir));
@@ -440,9 +551,9 @@ function renderConnections() {
   updateSelectedClasses();
 }
 
-function startConnectionDrag(nodeId, point, event) {
+function startConnectionDrag(layerId, point, event) {
   connectionDrag = {
-    from: { nodeId, point }
+    from: { layerId, point }
   };
   if (previewPath) {
     previewPath.style.display = 'block';
@@ -455,9 +566,9 @@ function startConnectionDrag(nodeId, point, event) {
 
 function handleConnectionDrag(event) {
   if (!connectionDrag) return;
-  const fromNode = findNode(connectionDrag.from.nodeId);
-  if (!fromNode || !previewPath) return;
-  const start = getConnectionPoint(fromNode, connectionDrag.from.point);
+  const fromLayer = findLayer(connectionDrag.from.layerId);
+  if (!fromLayer || !previewPath) return;
+  const start = getConnectionPoint(fromLayer, connectionDrag.from.point);
   const end = getStagePoint(event.clientX, event.clientY);
   const startDir = pointDirections[connectionDrag.from.point] || pointDirections.right;
   const endDir = { x: 0, y: 0 };
@@ -468,10 +579,10 @@ function stopConnectionDrag(event) {
   if (!connectionDrag) return;
   const target = event.target.closest('.connection-point');
   if (target) {
-    const toNodeId = parseInt(target.dataset.nodeId, 10);
+    const toLayerId = parseInt(target.dataset.layerId, 10);
     const toPoint = target.dataset.point;
-    if (Number.isFinite(toNodeId) && validPoints.includes(toPoint)) {
-      addConnection(connectionDrag.from, { nodeId: toNodeId, point: toPoint });
+    if (Number.isFinite(toLayerId) && validPoints.includes(toPoint)) {
+      addConnection(connectionDrag.from, { layerId: toLayerId, point: toPoint });
     }
   }
 
@@ -504,163 +615,8 @@ function removeConnection(connectionId) {
   }
 }
 
-function ensureCalloutElement(callout) {
-  if (calloutEls.has(callout.id)) return calloutEls.get(callout.id);
-
-  const el = document.createElement('div');
-  el.className = 'flow-callout';
-  el.dataset.calloutId = callout.id;
-
-  const header = document.createElement('div');
-  header.className = 'callout-header';
-  header.textContent = 'Callout';
-  header.addEventListener('mousedown', (e) => {
-    e.stopPropagation();
-    setSelection({ type: 'callout', id: callout.id });
-    startCalloutDrag(callout, e);
-  });
-
-  const text = document.createElement('div');
-  text.className = 'callout-text';
-  text.textContent = callout.text;
-  text.addEventListener('dblclick', (e) => {
-    e.stopPropagation();
-    startCalloutEditing(callout, el, text);
-  });
-
-  const anchor = document.createElement('div');
-  anchor.className = 'callout-anchor';
-  anchor.title = 'Drag to attach arrow';
-  anchor.addEventListener('mousedown', (e) => {
-    e.stopPropagation();
-    startCalloutArrowDrag(callout, e);
-  });
-
-  el.appendChild(header);
-  el.appendChild(text);
-  el.appendChild(anchor);
-
-  el.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setSelection({ type: 'callout', id: callout.id });
-  });
-
-  calloutEls.set(callout.id, el);
-  if (calloutsLayer) calloutsLayer.appendChild(el);
-  return el;
-}
-
-function updateCalloutElement(callout) {
-  const el = calloutEls.get(callout.id);
-  if (!el) return;
-  el.style.left = `${callout.x}px`;
-  el.style.top = `${callout.y}px`;
-  el.style.width = `${callout.width}px`;
-  el.style.height = `${callout.height}px`;
-  el.style.setProperty('--callout-color', callout.color);
-
-  const textEl = el.querySelector('.callout-text');
-  if (textEl && !el.classList.contains('editing')) {
-    textEl.textContent = callout.text;
-  }
-}
-
-function createCallout(options = {}) {
-  const center = getViewportCenter();
-  const width = options.width || 220;
-  const height = options.height || 130;
-  const callout = {
-    id: state.nextCalloutId++,
-    x: options.x ?? center.x - width / 2,
-    y: options.y ?? center.y - height / 2,
-    width,
-    height,
-    text: options.text || 'Add a note or clarification.',
-    color: options.color || DEFAULT_CALLOUT_COLOR,
-    target: options.target || {
-      x: center.x + width / 2 + 140,
-      y: center.y
-    }
-  };
-
-  state.callouts.push(callout);
-  ensureCalloutElement(callout);
-  updateCalloutElement(callout);
-  setSelection({ type: 'callout', id: callout.id });
-  ensureCanvasBounds();
-  renderCalloutArrows();
-  updateEmptyState();
-  return callout;
-}
-
-function startCalloutEditing(callout, calloutEl, textEl) {
-  calloutEl.classList.add('editing');
-  textEl.contentEditable = 'true';
-  textEl.classList.add('editable');
-  textEl.focus();
-
-  const range = document.createRange();
-  range.selectNodeContents(textEl);
-  const sel = window.getSelection();
-  sel.removeAllRanges();
-  sel.addRange(range);
-
-  const finish = (cancel) => {
-    textEl.contentEditable = 'false';
-    textEl.classList.remove('editable');
-    calloutEl.classList.remove('editing');
-    const nextText = textEl.textContent.trim();
-    if (!cancel && nextText) {
-      callout.text = nextText;
-    }
-    textEl.textContent = callout.text;
-  };
-
-  textEl.onblur = () => finish(false);
-  textEl.onkeydown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      textEl.blur();
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      finish(true);
-      textEl.blur();
-    }
-  };
-}
-
-function startCalloutDrag(callout, event) {
-  const start = getStagePoint(event.clientX, event.clientY);
-  calloutDrag = {
-    id: callout.id,
-    offsetX: start.x - callout.x,
-    offsetY: start.y - callout.y
-  };
-  document.addEventListener('mousemove', handleCalloutDrag);
-  document.addEventListener('mouseup', stopCalloutDrag);
-}
-
-function handleCalloutDrag(event) {
-  if (!calloutDrag) return;
-  const callout = findCallout(calloutDrag.id);
-  if (!callout) return;
-  const point = getStagePoint(event.clientX, event.clientY);
-  callout.x = Math.max(0, point.x - calloutDrag.offsetX);
-  callout.y = Math.max(0, point.y - calloutDrag.offsetY);
-  updateCalloutElement(callout);
-  renderCalloutArrows();
-  ensureCanvasBounds();
-}
-
-function stopCalloutDrag() {
-  calloutDrag = null;
-  document.removeEventListener('mousemove', handleCalloutDrag);
-  document.removeEventListener('mouseup', stopCalloutDrag);
-}
-
-function startCalloutArrowDrag(callout, event) {
-  calloutArrowDrag = { id: callout.id };
+function startCalloutArrowDrag(layer, event) {
+  calloutArrowDrag = { id: layer.id };
   if (previewPath) {
     previewPath.style.display = 'block';
     previewPath.setAttribute('marker-end', 'url(#calloutArrow)');
@@ -672,28 +628,28 @@ function startCalloutArrowDrag(callout, event) {
 
 function handleCalloutArrowDrag(event) {
   if (!calloutArrowDrag) return;
-  const callout = findCallout(calloutArrowDrag.id);
-  if (!callout || !previewPath) return;
-  const start = getCalloutAnchor(callout);
+  const layer = findLayer(calloutArrowDrag.id);
+  if (!layer || !previewPath) return;
+  const start = getCalloutAnchor(layer);
   const end = getStagePoint(event.clientX, event.clientY);
   previewPath.setAttribute('d', buildCurve(start, end, { x: 1, y: 0 }, { x: 0, y: 0 }));
 }
 
 function stopCalloutArrowDrag(event) {
   if (!calloutArrowDrag) return;
-  const callout = findCallout(calloutArrowDrag.id);
-  if (!callout) return;
+  const layer = findLayer(calloutArrowDrag.id);
+  if (!layer) return;
 
   const target = event.target.closest('.connection-point');
   if (target) {
-    const nodeId = parseInt(target.dataset.nodeId, 10);
+    const layerId = parseInt(target.dataset.layerId, 10);
     const point = target.dataset.point;
-    if (Number.isFinite(nodeId) && validPoints.includes(point)) {
-      callout.target = { nodeId, point };
+    if (Number.isFinite(layerId) && validPoints.includes(point)) {
+      layer.target = { layerId, point };
     }
   } else {
     const dropPoint = getStagePoint(event.clientX, event.clientY);
-    callout.target = { x: dropPoint.x, y: dropPoint.y };
+    layer.target = { x: dropPoint.x, y: dropPoint.y };
   }
 
   calloutArrowDrag = null;
@@ -706,88 +662,77 @@ function stopCalloutArrowDrag(event) {
   document.removeEventListener('mouseup', stopCalloutArrowDrag);
 }
 
-function getCalloutAnchor(callout) {
+function getCalloutAnchor(layer) {
   return {
-    x: callout.x + callout.width,
-    y: callout.y + callout.height / 2
+    x: layer.x + layer.width,
+    y: layer.y + layer.height / 2
   };
 }
 
-function getCalloutTarget(callout) {
-  if (callout.target && typeof callout.target.nodeId === 'number') {
-    const node = findNode(callout.target.nodeId);
-    if (node) {
-      return getConnectionPoint(node, callout.target.point);
+function getCalloutTarget(layer) {
+  if (layer.target && typeof layer.target.layerId === 'number') {
+    const targetLayer = findLayer(layer.target.layerId);
+    if (targetLayer && targetLayer.type === 'node') {
+      return getConnectionPoint(targetLayer, layer.target.point);
     }
   }
-  if (callout.target && Number.isFinite(callout.target.x) && Number.isFinite(callout.target.y)) {
-    return { x: callout.target.x, y: callout.target.y };
+  if (layer.target && Number.isFinite(layer.target.x) && Number.isFinite(layer.target.y)) {
+    return { x: layer.target.x, y: layer.target.y };
   }
   return {
-    x: callout.x + callout.width + 120,
-    y: callout.y + callout.height / 2
+    x: layer.x + layer.width + 120,
+    y: layer.y + layer.height / 2
   };
 }
 
-function ensureCalloutPath(callout) {
-  if (calloutPathEls.has(callout.id)) return calloutPathEls.get(callout.id);
+function ensureCalloutPath(layer) {
+  if (calloutPathEls.has(layer.id)) return calloutPathEls.get(layer.id);
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   path.classList.add('callout-arrow');
   path.setAttribute('marker-end', 'url(#calloutArrow)');
   if (calloutLayer) calloutLayer.appendChild(path);
-  calloutPathEls.set(callout.id, path);
+  calloutPathEls.set(layer.id, path);
   return path;
 }
 
 function renderCalloutArrows() {
-  const activeIds = new Set(state.callouts.map((c) => c.id));
+  const calloutIds = new Set(state.layers.filter(l => l.type === 'callout').map(l => l.id));
   calloutPathEls.forEach((el, id) => {
-    if (!activeIds.has(id)) {
+    if (!calloutIds.has(id)) {
       el.remove();
       calloutPathEls.delete(id);
     }
   });
 
-  state.callouts.forEach((callout) => {
-    const path = ensureCalloutPath(callout);
-    const start = getCalloutAnchor(callout);
-    const end = getCalloutTarget(callout);
+  state.layers.forEach((layer) => {
+    if (layer.type !== 'callout') return;
+    const path = ensureCalloutPath(layer);
+    const start = getCalloutAnchor(layer);
+    const end = getCalloutTarget(layer);
     const curve = buildCurve(start, end, { x: 1, y: 0 }, { x: -1, y: 0 });
     path.setAttribute('d', curve);
   });
 }
 
 function renderAll() {
-  const activeNodeIds = new Set(state.nodes.map((n) => n.id));
-  nodeEls.forEach((el, id) => {
-    if (!activeNodeIds.has(id)) {
+  const activeIds = new Set(state.layers.map((l) => l.id));
+  elementEls.forEach((el, id) => {
+    if (!activeIds.has(id)) {
       el.remove();
-      nodeEls.delete(id);
+      elementEls.delete(id);
     }
   });
 
-  state.nodes.forEach((node) => {
-    ensureNodeElement(node);
-    updateNodeElement(node);
-  });
-
-  const activeCalloutIds = new Set(state.callouts.map((c) => c.id));
-  calloutEls.forEach((el, id) => {
-    if (!activeCalloutIds.has(id)) {
-      el.remove();
-      calloutEls.delete(id);
-    }
-  });
-
-  state.callouts.forEach((callout) => {
-    ensureCalloutElement(callout);
-    updateCalloutElement(callout);
+  state.layers.forEach((layer) => {
+    ensureElementNode(layer);
+    updateElementNode(layer);
   });
 
   ensureCanvasBounds();
   renderConnections();
   renderCalloutArrows();
   updateSelectedClasses();
+  renderLayers();
   updateEmptyState();
 }
 
@@ -795,16 +740,12 @@ function setSelection(selection) {
   state.selected = selection;
   updateSelectedClasses();
   renderProperties();
+  renderLayers();
 }
 
 function updateSelectedClasses() {
-  nodeEls.forEach((el, id) => {
-    const selected = state.selected && state.selected.type === 'node' && state.selected.id === id;
-    el.classList.toggle('selected', Boolean(selected));
-  });
-
-  calloutEls.forEach((el, id) => {
-    const selected = state.selected && state.selected.type === 'callout' && state.selected.id === id;
+  elementEls.forEach((el, id) => {
+    const selected = state.selected && state.selected.type === 'layer' && state.selected.id === id;
     el.classList.toggle('selected', Boolean(selected));
   });
 
@@ -821,81 +762,43 @@ function renderProperties() {
   if (!state.selected) {
     const info = document.createElement('p');
     info.className = 'properties-muted';
-    info.textContent = 'Select a node, connector, or callout to edit its details.';
+    info.textContent = 'Select an element to edit its properties.';
     propertiesPanel.appendChild(info);
     return;
   }
 
-  if (state.selected.type === 'node') {
-    const node = findNode(state.selected.id);
-    if (!node) return;
+  if (state.selected.type === 'layer') {
+    const layer = findLayer(state.selected.id);
+    if (!layer) return;
 
     const title = document.createElement('div');
     title.className = 'panel-title';
-    title.textContent = 'Node';
+    title.textContent = layer.type.charAt(0).toUpperCase() + layer.type.slice(1);
 
-    const colorRow = createColorRow('Fill color', node.color, (value) => {
-      node.color = value;
-      updateNodeElement(node);
-    }, DEFAULT_NODE_COLOR);
+    const rows = [];
 
-    const sizeRow = createSizeRow(
-      node.width,
-      node.height,
-      MIN_NODE_WIDTH,
-      MIN_NODE_HEIGHT,
-      (w, h) => {
-        node.width = w;
-        node.height = h;
-        updateNodeElement(node);
-        renderConnections();
-        renderCalloutArrows();
-        ensureCanvasBounds();
-      }
-    );
+    if (layer.type === 'node' || layer.type === 'shape') {
+      rows.push(createColorRow('Fill color', layer.color, (value) => {
+        layer.color = value;
+        updateElementNode(layer);
+      }));
+    }
+
+    rows.push(createSizeRow(layer.width, layer.height, (w, h) => {
+      layer.width = w;
+      layer.height = h;
+      updateElementNode(layer);
+      renderConnections();
+      renderCalloutArrows();
+      ensureCanvasBounds();
+    }));
 
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn btn-sm btn-danger';
-    deleteBtn.textContent = 'Delete node';
+    deleteBtn.textContent = `Delete ${layer.type}`;
     deleteBtn.onclick = () => removeSelected();
 
-    propertiesPanel.append(title, colorRow, sizeRow, deleteBtn);
-    return;
-  }
-
-  if (state.selected.type === 'callout') {
-    const callout = findCallout(state.selected.id);
-    if (!callout) return;
-
-    const title = document.createElement('div');
-    title.className = 'panel-title';
-    title.textContent = 'Callout';
-
-    const colorRow = createColorRow('Fill color', callout.color, (value) => {
-      callout.color = value;
-      updateCalloutElement(callout);
-    }, DEFAULT_CALLOUT_COLOR);
-
-    const sizeRow = createSizeRow(
-      callout.width,
-      callout.height,
-      MIN_CALLOUT_WIDTH,
-      MIN_CALLOUT_HEIGHT,
-      (w, h) => {
-        callout.width = w;
-        callout.height = h;
-        updateCalloutElement(callout);
-        renderCalloutArrows();
-        ensureCanvasBounds();
-      }
-    );
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'btn btn-sm btn-danger';
-    deleteBtn.textContent = 'Delete callout';
-    deleteBtn.onclick = () => removeSelected();
-
-    propertiesPanel.append(title, colorRow, sizeRow, deleteBtn);
+    propertiesPanel.append(title, ...rows, deleteBtn);
     return;
   }
 
@@ -920,20 +823,20 @@ function renderProperties() {
   }
 }
 
-function createColorRow(labelText, value, onChange, fallback = DEFAULT_NODE_COLOR) {
+function createColorRow(labelText, value, onChange) {
   const row = document.createElement('div');
   row.className = 'properties-row';
   const label = document.createElement('label');
   label.textContent = labelText;
   const input = document.createElement('input');
   input.type = 'color';
-  input.value = normalizeColor(value, fallback);
+  input.value = normalizeColor(value, DEFAULT_NODE_COLOR);
   input.addEventListener('input', () => onChange(input.value));
   row.append(label, input);
   return row;
 }
 
-function createSizeRow(width, height, minWidth, minHeight, onChange) {
+function createSizeRow(width, height, onChange) {
   const row = document.createElement('div');
   row.className = 'properties-row';
   const label = document.createElement('label');
@@ -943,17 +846,17 @@ function createSizeRow(width, height, minWidth, minHeight, onChange) {
 
   const widthInput = document.createElement('input');
   widthInput.type = 'number';
-  widthInput.min = minWidth;
+  widthInput.min = 60;
   widthInput.value = Math.round(width);
 
   const heightInput = document.createElement('input');
   heightInput.type = 'number';
-  heightInput.min = minHeight;
+  heightInput.min = 40;
   heightInput.value = Math.round(height);
 
   const update = () => {
-    const nextWidth = clamp(parseFloat(widthInput.value) || minWidth, minWidth, 900);
-    const nextHeight = clamp(parseFloat(heightInput.value) || minHeight, minHeight, 700);
+    const nextWidth = clamp(parseFloat(widthInput.value) || 60, 60, 900);
+    const nextHeight = clamp(parseFloat(heightInput.value) || 40, 40, 700);
     widthInput.value = Math.round(nextWidth);
     heightInput.value = Math.round(nextHeight);
     onChange(nextWidth, nextHeight);
@@ -967,12 +870,125 @@ function createSizeRow(width, height, minWidth, minHeight, onChange) {
   return row;
 }
 
+function renderLayers() {
+  if (!layersList) return;
+  layersList.innerHTML = '';
+
+  const sortedLayers = [...state.layers].sort((a, b) => b.zIndex - a.zIndex);
+
+  sortedLayers.forEach((layer) => {
+    const item = document.createElement('div');
+    item.className = 'layer-item';
+    item.dataset.layerId = layer.id;
+    item.draggable = true;
+
+    if (state.selected && state.selected.type === 'layer' && state.selected.id === layer.id) {
+      item.classList.add('selected');
+    }
+
+    const icon = document.createElement('div');
+    icon.className = 'layer-icon';
+    icon.innerHTML = getLayerIcon(layer.type);
+
+    const name = document.createElement('div');
+    name.className = 'layer-name';
+    name.textContent = layer.text || layer.type;
+
+    const actions = document.createElement('div');
+    actions.className = 'layer-actions';
+
+    const visibilityBtn = document.createElement('button');
+    visibilityBtn.className = 'layer-action-btn';
+    visibilityBtn.innerHTML = layer.visible
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    visibilityBtn.title = layer.visible ? 'Hide' : 'Show';
+    visibilityBtn.onclick = (e) => {
+      e.stopPropagation();
+      layer.visible = !layer.visible;
+      updateElementNode(layer);
+      renderLayers();
+    };
+
+    const lockBtn = document.createElement('button');
+    lockBtn.className = 'layer-action-btn';
+    lockBtn.innerHTML = layer.locked
+      ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'
+      : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2" ry="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>';
+    lockBtn.title = layer.locked ? 'Unlock' : 'Lock';
+    lockBtn.onclick = (e) => {
+      e.stopPropagation();
+      layer.locked = !layer.locked;
+      updateElementNode(layer);
+      renderLayers();
+    };
+
+    actions.append(visibilityBtn, lockBtn);
+
+    item.append(icon, name, actions);
+
+    item.onclick = () => {
+      setSelection({ type: 'layer', id: layer.id });
+    };
+
+    item.ondragstart = (e) => {
+      state.layerDrag = { id: layer.id, index: sortedLayers.indexOf(layer) };
+      e.dataTransfer.effectAllowed = 'move';
+    };
+
+    item.ondragover = (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    };
+
+    item.ondrop = (e) => {
+      e.preventDefault();
+      if (!state.layerDrag) return;
+      const dragLayer = findLayer(state.layerDrag.id);
+      const dropLayer = layer;
+      if (!dragLayer || dragLayer.id === dropLayer.id) return;
+
+      const dragIndex = sortedLayers.indexOf(dragLayer);
+      const dropIndex = sortedLayers.indexOf(dropLayer);
+
+      sortedLayers.splice(dragIndex, 1);
+      sortedLayers.splice(dropIndex, 0, dragLayer);
+
+      sortedLayers.forEach((l, idx) => {
+        l.zIndex = sortedLayers.length - idx - 1;
+      });
+
+      state.layerDrag = null;
+      renderAll();
+    };
+
+    item.ondragend = () => {
+      state.layerDrag = null;
+    };
+
+    layersList.appendChild(item);
+  });
+}
+
+function getLayerIcon(type) {
+  switch (type) {
+    case 'node':
+      return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>';
+    case 'shape':
+      return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16"/></svg>';
+    case 'textbox':
+      return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>';
+    case 'callout':
+      return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>';
+    default:
+      return '';
+  }
+}
+
 function removeSelected() {
   if (!state.selected) return;
-  if (state.selected.type === 'node') {
-    removeNode(state.selected.id);
-  } else if (state.selected.type === 'callout') {
-    removeCallout(state.selected.id);
+  if (state.selected.type === 'layer') {
+    removeLayer(state.selected.id);
   } else if (state.selected.type === 'connection') {
     removeConnection(state.selected.id);
   }
@@ -980,32 +996,23 @@ function removeSelected() {
   renderAll();
 }
 
-function removeNode(nodeId) {
-  const node = findNode(nodeId);
-  if (!node) return;
+function removeLayer(layerId) {
+  const layer = findLayer(layerId);
+  if (!layer) return;
 
-  state.callouts.forEach((callout) => {
-    if (callout.target && callout.target.nodeId === nodeId) {
-      callout.target = getConnectionPoint(node, callout.target.point);
-    }
-  });
+  if (layer.type === 'node') {
+    state.layers.forEach((l) => {
+      if (l.type === 'callout' && l.target && l.target.layerId === layerId) {
+        l.target = getConnectionPoint(layer, l.target.point);
+      }
+    });
 
-  state.nodes = state.nodes.filter((n) => n.id !== nodeId);
-  state.connections = state.connections.filter(
-    (c) => c.from.nodeId !== nodeId && c.to.nodeId !== nodeId
-  );
-}
+    state.connections = state.connections.filter(
+      (c) => c.from.layerId !== layerId && c.to.layerId !== layerId
+    );
+  }
 
-function removeCallout(calloutId) {
-  state.callouts = state.callouts.filter((c) => c.id !== calloutId);
-}
-
-function findNode(id) {
-  return state.nodes.find((n) => n.id === id);
-}
-
-function findCallout(id) {
-  return state.callouts.find((c) => c.id === id);
+  state.layers = state.layers.filter((l) => l.id !== layerId);
 }
 
 function downloadJson(filename, content) {
@@ -1022,86 +1029,28 @@ function downloadJson(filename, content) {
 
 function exportFlowchart() {
   const payload = {
-    version: 1,
+    version: 2,
     baseSize: { width: baseWidth, height: baseHeight },
     zoom: state.zoom,
     scroll: {
       left: flowCanvasScroll ? flowCanvasScroll.scrollLeft : 0,
       top: flowCanvasScroll ? flowCanvasScroll.scrollTop : 0
     },
-    nodes: state.nodes,
+    layers: state.layers,
     connections: state.connections,
-    callouts: state.callouts,
-    nextIds: {
-      node: state.nextNodeId,
-      connection: state.nextConnectionId,
-      callout: state.nextCalloutId
-    }
+    nextId: state.nextId,
+    nextConnectionId: state.nextConnectionId
   };
 
   const dateStamp = new Date().toISOString().slice(0, 10);
   downloadJson(`flowchart-${dateStamp}.json`, JSON.stringify(payload, null, 2));
-  setStatus('Flowchart exported.', 'success');
-}
-
-function sanitizeNodes(rawNodes) {
-  if (!Array.isArray(rawNodes)) return [];
-  return rawNodes.map((raw) => ({
-    id: Number.isFinite(raw.id) ? raw.id : state.nextNodeId++,
-    x: Number.isFinite(raw.x) ? raw.x : 0,
-    y: Number.isFinite(raw.y) ? raw.y : 0,
-    width: clamp(Number(raw.width) || 180, MIN_NODE_WIDTH, 900),
-    height: clamp(Number(raw.height) || 110, MIN_NODE_HEIGHT, 700),
-    text: String(raw.text || 'Node'),
-    color: normalizeColor(raw.color, DEFAULT_NODE_COLOR)
-  }));
-}
-
-function sanitizeConnections(rawConnections, nodes) {
-  if (!Array.isArray(rawConnections)) return [];
-  const nodeIds = new Set(nodes.map((n) => n.id));
-  return rawConnections
-    .map((raw) => ({
-      id: Number.isFinite(raw.id) ? raw.id : state.nextConnectionId++,
-      from: raw.from || {},
-      to: raw.to || {}
-    }))
-    .filter((conn) => (
-      Number.isFinite(conn.from.nodeId) &&
-      Number.isFinite(conn.to.nodeId) &&
-      nodeIds.has(conn.from.nodeId) &&
-      nodeIds.has(conn.to.nodeId) &&
-      validPoints.includes(conn.from.point) &&
-      validPoints.includes(conn.to.point)
-    ));
-}
-
-function sanitizeCallouts(rawCallouts) {
-  if (!Array.isArray(rawCallouts)) return [];
-  return rawCallouts.map((raw) => ({
-    id: Number.isFinite(raw.id) ? raw.id : state.nextCalloutId++,
-    x: Number.isFinite(raw.x) ? raw.x : 0,
-    y: Number.isFinite(raw.y) ? raw.y : 0,
-    width: clamp(Number(raw.width) || 220, MIN_CALLOUT_WIDTH, 900),
-    height: clamp(Number(raw.height) || 130, MIN_CALLOUT_HEIGHT, 700),
-    text: String(raw.text || 'Callout'),
-    color: normalizeColor(raw.color, DEFAULT_CALLOUT_COLOR),
-    target: raw.target || {}
-  }));
 }
 
 function importFlowchart(data) {
-  const nodes = sanitizeNodes(data.nodes);
-  const connections = sanitizeConnections(data.connections, nodes);
-  const callouts = sanitizeCallouts(data.callouts);
-
-  state.nodes = nodes;
-  state.connections = connections;
-  state.callouts = callouts;
-
-  state.nextNodeId = data.nextIds?.node || (Math.max(0, ...nodes.map((n) => n.id)) + 1);
-  state.nextConnectionId = data.nextIds?.connection || (Math.max(0, ...connections.map((c) => c.id)) + 1);
-  state.nextCalloutId = data.nextIds?.callout || (Math.max(0, ...callouts.map((c) => c.id)) + 1);
+  state.layers = data.layers || [];
+  state.connections = data.connections || [];
+  state.nextId = data.nextId || 1;
+  state.nextConnectionId = data.nextConnectionId || 1;
 
   baseWidth = data.baseSize?.width || baseWidth;
   baseHeight = data.baseSize?.height || baseHeight;
@@ -1115,87 +1064,134 @@ function importFlowchart(data) {
       flowCanvasScroll.scrollTop = data.scroll.top || 0;
     });
   }
-
-  setStatus('Flowchart imported.', 'success');
 }
 
-/* -------------------- Event wiring -------------------- */
+function setupMenuBar() {
+  const menuTriggers = document.querySelectorAll('.menu-trigger');
+  let activeMenu = null;
 
-if (flowSidebarToggle && flowSidebar) {
-  flowSidebarToggle.addEventListener('click', () => {
-    flowSidebar.classList.toggle('collapsed');
+  menuTriggers.forEach((trigger) => {
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const menuName = trigger.dataset.menu;
+      const dropdown = document.getElementById(`menu${menuName.charAt(0).toUpperCase() + menuName.slice(1)}`);
+
+      if (activeMenu && activeMenu !== dropdown) {
+        activeMenu.classList.remove('active');
+      }
+
+      if (dropdown) {
+        const isActive = dropdown.classList.toggle('active');
+        activeMenu = isActive ? dropdown : null;
+      }
+    });
   });
-}
 
-if (addNodeBtn) {
-  addNodeBtn.addEventListener('click', () => {
-    createNode();
+  document.addEventListener('click', () => {
+    if (activeMenu) {
+      activeMenu.classList.remove('active');
+      activeMenu = null;
+    }
   });
-}
 
-if (addCalloutBtn) {
-  addCalloutBtn.addEventListener('click', () => {
-    createCallout();
+  document.getElementById('menuNew')?.addEventListener('click', () => {
+    if (confirm('Clear everything and start fresh?')) {
+      state.layers = [];
+      state.connections = [];
+      state.selected = null;
+      state.nextId = 1;
+      state.nextConnectionId = 1;
+      renderAll();
+    }
   });
-}
 
-if (gridToggle && flowCanvas) {
-  gridToggle.addEventListener('change', () => {
-    flowCanvas.classList.toggle('grid-on', gridToggle.checked);
+  document.getElementById('menuImport')?.addEventListener('click', () => {
+    flowImportFile?.click();
   });
-  // initial sync
-  flowCanvas.classList.toggle('grid-on', gridToggle.checked);
-}
 
-if (flowZoomIn) {
-  flowZoomIn.addEventListener('click', () => {
-    state.zoom = clamp(state.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
-    updateZoom();
-  });
-}
-
-if (flowZoomOut) {
-  flowZoomOut.addEventListener('click', () => {
-    state.zoom = clamp(state.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
-    updateZoom();
-  });
-}
-
-if (flowZoomReset) {
-  flowZoomReset.addEventListener('click', () => {
-    state.zoom = 1;
-    updateZoom();
-  });
-}
-
-if (flowExportBtn) {
-  flowExportBtn.addEventListener('click', () => {
-    if (!state.nodes.length && !state.callouts.length) {
-      setStatus('Nothing to export yet.', 'error');
+  document.getElementById('menuExport')?.addEventListener('click', () => {
+    if (!state.layers.length) {
+      alert('Nothing to export yet.');
       return;
     }
     exportFlowchart();
   });
-}
 
-if (flowImportBtn && flowImportFile) {
-  flowImportBtn.addEventListener('click', () => {
-    flowImportFile.click();
+  document.getElementById('menuDelete')?.addEventListener('click', () => {
+    removeSelected();
   });
 
+  document.getElementById('menuDuplicate')?.addEventListener('click', () => {
+    if (state.selected && state.selected.type === 'layer') {
+      const layer = findLayer(state.selected.id);
+      if (layer) {
+        const copy = {
+          ...layer,
+          id: state.nextId++,
+          x: layer.x + 20,
+          y: layer.y + 20,
+          zIndex: state.layers.length
+        };
+        state.layers.push(copy);
+        setSelection({ type: 'layer', id: copy.id });
+        renderAll();
+      }
+    }
+  });
+
+  document.getElementById('menuAddNode')?.addEventListener('click', () => {
+    createLayer('node');
+  });
+
+  document.getElementById('menuAddShape')?.addEventListener('click', () => {
+    createLayer('shape');
+  });
+
+  document.getElementById('menuAddTextbox')?.addEventListener('click', () => {
+    createLayer('textbox');
+  });
+
+  document.getElementById('menuAddCallout')?.addEventListener('click', () => {
+    createLayer('callout');
+  });
+
+  document.getElementById('menuZoomIn')?.addEventListener('click', () => {
+    state.zoom = clamp(state.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
+    updateZoom();
+  });
+
+  document.getElementById('menuZoomOut')?.addEventListener('click', () => {
+    state.zoom = clamp(state.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
+    updateZoom();
+  });
+
+  document.getElementById('menuZoomReset')?.addEventListener('click', () => {
+    state.zoom = 1;
+    updateZoom();
+  });
+
+  const gridToggle = document.getElementById('menuGridToggle');
+  if (gridToggle && flowCanvas) {
+    gridToggle.addEventListener('change', () => {
+      flowCanvas.classList.toggle('grid-on', gridToggle.checked);
+    });
+    flowCanvas.classList.toggle('grid-on', gridToggle.checked);
+  }
+}
+
+if (flowImportFile) {
   flowImportFile.addEventListener('change', async (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    setStatus(`Loading ${file.name}...`);
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      if (!data || !data.nodes) {
+      if (!data || !data.layers) {
         throw new Error('Invalid flowchart file.');
       }
       importFlowchart(data);
     } catch (err) {
-      setStatus(err.message || 'Import failed.', 'error');
+      alert(err.message || 'Import failed.');
     } finally {
       flowImportFile.value = '';
     }
@@ -1231,22 +1227,21 @@ document.addEventListener('keydown', (event) => {
   }
   if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
     event.preventDefault();
-    if (flowZoomIn) flowZoomIn.click();
+    state.zoom = clamp(state.zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
+    updateZoom();
   }
   if ((event.ctrlKey || event.metaKey) && event.key === '-') {
     event.preventDefault();
-    if (flowZoomOut) flowZoomOut.click();
+    state.zoom = clamp(state.zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX);
+    updateZoom();
   }
   if ((event.ctrlKey || event.metaKey) && event.key === '0') {
     event.preventDefault();
-    if (flowZoomReset) flowZoomReset.click();
+    state.zoom = 1;
+    updateZoom();
   }
 });
 
-/* -------------------- Initial render -------------------- */
-
+setupMenuBar();
 updateZoom();
-if (gridToggle && flowCanvas) {
-  flowCanvas.classList.toggle('grid-on', gridToggle.checked);
-}
 renderAll();

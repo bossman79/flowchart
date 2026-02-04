@@ -1415,3 +1415,417 @@ body.level-coloring .tree-card.depth-6 {
     font-size: 32px;
   }
 }
+
+/* Menu Bar */
+.menu-bar {
+  height: 42px;
+  background: linear-gradient(90deg, rgba(123, 176, 255, 0.12), rgba(24, 38, 66, 0.6)), var(--sidebar-bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.menu-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.menu-bar-back {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+  margin-right: 8px;
+}
+
+.menu-bar-back:hover {
+  background: rgba(123, 176, 255, 0.15);
+  color: var(--text);
+}
+
+.menu-bar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.menu-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.menu-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-item {
+  position: relative;
+}
+
+.menu-trigger {
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.menu-trigger:hover {
+  background: rgba(123, 176, 255, 0.15);
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  min-width: 180px;
+  padding: 6px;
+  display: none;
+  z-index: 300;
+}
+
+.menu-dropdown.active {
+  display: block;
+}
+
+.menu-option {
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+  display: block;
+}
+
+.menu-option:hover {
+  background: var(--surface-hover);
+}
+
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.menu-toggle input {
+  cursor: pointer;
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+/* Flowchart App Layout */
+.flowchart-app {
+  flex-direction: column;
+}
+
+.flowchart-app .sidebar {
+  position: fixed;
+  right: 0;
+  top: 42px;
+  bottom: 0;
+  left: auto;
+  width: var(--sidebar-width);
+  border-right: none;
+  border-left: 1px solid var(--border);
+  z-index: 150;
+}
+
+.flowchart-app .main-area {
+  margin-top: 42px;
+  margin-right: var(--sidebar-width);
+}
+
+.layers-sidebar .sidebar-content {
+  overflow-y: auto;
+  height: 100%;
+}
+
+.layers-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.layers-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.layer-item:hover {
+  background: var(--surface-hover);
+  border-color: #2f3f5f;
+}
+
+.layer-item.selected {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.layer-item.dragging {
+  opacity: 0.5;
+}
+
+.layer-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.layer-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.layer-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.layer-item:hover .layer-actions {
+  opacity: 1;
+}
+
+.layer-action-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.layer-action-btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.properties-section {
+  border-top: 1px solid var(--border);
+  max-height: 50%;
+  overflow-y: auto;
+}
+
+/* Flow Elements */
+.flow-element {
+  position: absolute;
+  cursor: grab;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.flow-element.dragging {
+  cursor: grabbing;
+  opacity: 0.9;
+}
+
+.flow-element.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(123, 176, 255, 0.35);
+}
+
+.flow-element.locked {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Node */
+.flow-node {
+  padding: 12px 14px;
+  min-width: 150px;
+  min-height: 90px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(123, 176, 255, 0.12), transparent 55%), var(--element-color, var(--card-bg));
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+}
+
+.flow-node:hover {
+  box-shadow: var(--shadow);
+}
+
+/* Shape */
+.flow-shape {
+  border: 1px solid var(--border);
+  background: var(--element-color, var(--card-bg));
+  box-shadow: var(--shadow-sm);
+}
+
+.flow-shape:hover {
+  box-shadow: var(--shadow);
+}
+
+/* Textbox */
+.flow-textbox {
+  padding: 8px 10px;
+  min-width: 100px;
+  min-height: 40px;
+  background: transparent;
+  border: none;
+  cursor: grab;
+}
+
+.flow-textbox.selected {
+  background: rgba(123, 176, 255, 0.08);
+  border: 1px dashed var(--accent);
+}
+
+.textbox-text {
+  font-size: 14px;
+  line-height: 1.4;
+  outline: none;
+  min-height: 20px;
+  color: var(--text);
+}
+
+.textbox-text.editable {
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+/* Callout */
+.flow-callout {
+  padding: 12px 14px 14px;
+  min-width: 180px;
+  min-height: 100px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(123, 176, 255, 0.1), transparent 55%), var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Connection Points - All 8 sides */
+.connection-point {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0b152b;
+  border: 1px solid rgba(123, 176, 255, 0.9);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  cursor: crosshair;
+  z-index: 3;
+}
+
+.flow-element:hover .connection-point,
+.flow-element.selected .connection-point {
+  opacity: 1;
+}
+
+.connection-point:hover {
+  transform: translate(-50%, -50%) scale(1.3);
+}
+
+.point-top { top: 0; left: 50%; }
+.point-top-right { top: 0; left: 100%; }
+.point-right { top: 50%; left: 100%; }
+.point-bottom-right { top: 100%; left: 100%; }
+.point-bottom { top: 100%; left: 50%; }
+.point-bottom-left { top: 100%; left: 0; }
+.point-left { top: 50%; left: 0; }
+.point-top-left { top: 0; left: 0; }
+
+/* Single corner resize handle */
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+}
+
+.flow-element.selected .resize-handle {
+  opacity: 1;
+}
+
+.handle-br {
+  right: -5px;
+  bottom: -5px;
+  cursor: nwse-resize;
+}
+
+.flow-element.locked .resize-handle {
+  display: none;
+}
+
+.flow-element.locked .connection-point {
+  cursor: not-allowed;
+}
+
+@media (max-width: 1024px) {
+  .flowchart-app .sidebar {
+    width: 240px;
+  }
+
+  .flowchart-app .main-area {
+    margin-right: 240px;
+  }
+}

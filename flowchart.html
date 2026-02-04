@@ -8,81 +8,77 @@
 </head>
 <body class="flowchart-page">
   <div class="app flowchart-app">
-    <aside class="sidebar" id="flowSidebar">
-      <div class="sidebar-toggle" id="flowSidebarToggle">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M15 18l-6-6 6-6"/>
-        </svg>
+    <div class="menu-bar">
+      <div class="menu-bar-left">
+        <a class="menu-bar-back" href="index.html">← Landing</a>
+        <div class="menu-item">
+          <button class="menu-trigger" data-menu="file">File</button>
+          <div class="menu-dropdown" id="menuFile">
+            <button class="menu-option" id="menuNew">New</button>
+            <button class="menu-option" id="menuImport">Import JSON</button>
+            <button class="menu-option" id="menuExport">Export JSON</button>
+          </div>
+        </div>
+        <div class="menu-item">
+          <button class="menu-trigger" data-menu="edit">Edit</button>
+          <div class="menu-dropdown" id="menuEdit">
+            <button class="menu-option" id="menuDelete">Delete Selected</button>
+            <button class="menu-option" id="menuDuplicate">Duplicate</button>
+          </div>
+        </div>
+        <div class="menu-item">
+          <button class="menu-trigger" data-menu="insert">Insert</button>
+          <div class="menu-dropdown" id="menuInsert">
+            <button class="menu-option" id="menuAddNode">Add Node</button>
+            <button class="menu-option" id="menuAddShape">Add Shape</button>
+            <button class="menu-option" id="menuAddTextbox">Add Textbox</button>
+            <button class="menu-option" id="menuAddCallout">Add Callout</button>
+          </div>
+        </div>
+        <div class="menu-item">
+          <button class="menu-trigger" data-menu="view">View</button>
+          <div class="menu-dropdown" id="menuView">
+            <button class="menu-option" id="menuZoomIn">Zoom In</button>
+            <button class="menu-option" id="menuZoomOut">Zoom Out</button>
+            <button class="menu-option" id="menuZoomReset">Reset Zoom</button>
+            <div class="menu-divider"></div>
+            <label class="menu-option menu-toggle">
+              <input type="checkbox" id="menuGridToggle" checked>
+              <span>Show Grid</span>
+            </label>
+          </div>
+        </div>
       </div>
+      <div class="menu-bar-center">
+        <span class="menu-title">Flowchart Studio</span>
+      </div>
+      <div class="menu-bar-right">
+        <span class="zoom-level" id="flowZoomLevel">100%</span>
+      </div>
+    </div>
+
+    <aside class="sidebar layers-sidebar" id="flowSidebar">
       <div class="sidebar-content">
-        <div class="sidebar-header">
-          <a class="sidebar-back" href="index.html"><- Back to landing</a>
-          <h1>Flowchart Studio</h1>
-        </div>
-
-        <div class="sidebar-section">
+        <div class="sidebar-section layers-section">
           <div class="section-header">
-            <h2>Create</h2>
+            <h2>Layers</h2>
           </div>
-          <div class="action-row">
-            <button id="addNodeBtn" class="btn btn-sm btn-primary" type="button">Add Node</button>
-            <button id="addCalloutBtn" class="btn btn-sm" type="button">Add Callout</button>
-          </div>
+          <div class="layers-list" id="layersList"></div>
         </div>
 
-        <div class="sidebar-section">
+        <div class="sidebar-section properties-section">
           <div class="section-header">
             <h2>Properties</h2>
           </div>
           <div class="properties-panel" id="propertiesPanel">
-            <p class="properties-muted">Select a node, connector, or callout to edit its details.</p>
-          </div>
-        </div>
-
-        <div class="sidebar-section import-section">
-          <div class="section-header">
-            <h2>Import / Export</h2>
-          </div>
-          <div class="import-controls">
-            <input id="flowImportFile" type="file" accept=".json">
-            <button id="flowImportBtn" type="button" class="btn btn-sm">Import JSON</button>
-            <button id="flowExportBtn" type="button" class="btn btn-sm">Export JSON</button>
-            <p class="import-hint">Exports everything: layout, colors, connections, and callouts.</p>
-            <p class="import-status" id="flowStatus" aria-live="polite"></p>
-          </div>
-        </div>
-
-        <div class="sidebar-section">
-          <div class="section-header">
-            <h2>Canvas</h2>
-          </div>
-          <div class="level-toggle">
-            <span>Grid overlay</span>
-            <label class="toggle-switch">
-              <input id="gridToggle" type="checkbox" checked>
-              <span class="toggle-slider"></span>
-            </label>
+            <p class="properties-muted">Select an element to edit its properties.</p>
           </div>
         </div>
       </div>
     </aside>
 
     <main class="main-area">
-      <div class="toolbar">
-        <div class="zoom-controls">
-          <button id="flowZoomOut" class="btn btn-sm" title="Zoom Out">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M8 11h6"/></svg>
-          </button>
-          <span class="zoom-level" id="flowZoomLevel">100%</span>
-          <button id="flowZoomIn" class="btn btn-sm" title="Zoom In">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>
-          </button>
-          <button id="flowZoomReset" class="btn btn-sm" title="Reset Zoom">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9.75 9.75 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
-          </button>
-        </div>
-      </div>
-
+      <input id="flowImportFile" type="file" accept=".json" style="display:none;">
       <div class="canvas-scroll" id="flowCanvasScroll">
         <div class="flowchart-canvas grid-on" id="flowCanvas">
           <div class="flowchart-stage" id="flowStage">
@@ -99,12 +95,11 @@
               <g id="calloutLayer"></g>
               <path id="previewPath" class="flow-connection preview" marker-end="url(#arrowhead)" style="display:none;"></path>
             </svg>
-            <div id="flowNodes" class="flowchart-layer"></div>
-            <div id="flowCallouts" class="flowchart-layer"></div>
+            <div id="elementsLayer" class="flowchart-layer"></div>
             <div class="flow-empty-state" id="flowEmptyState">
               <div>
-                <p>Drop in a node to start your flow.</p>
-                <p>Drag connectors between points to link steps.</p>
+                <p>Use the Insert menu to add elements.</p>
+                <p>Drag connectors between nodes to link them.</p>
               </div>
             </div>
           </div>
